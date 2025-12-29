@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transaction Reconciliation Tool</title>
+    <title>Durham Autohaus - Transaction Reconciliation</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
@@ -14,14 +14,14 @@
         }
 
         :root {
-            --bg-primary: #0a0a0f;
-            --bg-secondary: #12121a;
-            --bg-tertiary: #1a1a24;
-            --border-color: #2a2a3a;
-            --text-primary: #f5f5f7;
-            --text-secondary: #a0a0b0;
-            --accent: #6366f1;
-            --accent-hover: #818cf8;
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #141414;
+            --bg-tertiary: #1c1c1c;
+            --border-color: #2a2a2a;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --accent: #c41e3a;
+            --accent-hover: #e02244;
             --success: #22c55e;
             --success-bg: rgba(34, 197, 94, 0.15);
             --error: #ef4444;
@@ -171,7 +171,7 @@
         .btn-primary:hover:not(:disabled) {
             background: var(--accent-hover);
             transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
+            box-shadow: 0 8px 24px rgba(196, 30, 58, 0.3);
         }
 
         .btn-primary:disabled {
@@ -302,6 +302,24 @@
             color: var(--text-secondary);
             position: sticky;
             top: 0;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s ease;
+        }
+
+        th:hover {
+            background: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        th .sort-icon {
+            margin-left: 6px;
+            opacity: 0.4;
+        }
+
+        th.sorted .sort-icon {
+            opacity: 1;
+            color: var(--accent);
         }
 
         td {
@@ -468,11 +486,12 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>Customer Code</th>
-                                <th>Owed (File 1)</th>
-                                <th>Owed (File 2)</th>
-                                <th>Difference</th>
-                                <th>Status</th>
+                                <th data-sort="serviceDate" onclick="sortTable('serviceDate')">Service Date <span class="sort-icon">↕</span></th>
+                                <th data-sort="customerCode" onclick="sortTable('customerCode')">Customer Code <span class="sort-icon">↕</span></th>
+                                <th data-sort="owedFile1" onclick="sortTable('owedFile1')">Owed (File 1) <span class="sort-icon">↕</span></th>
+                                <th data-sort="owedFile2" onclick="sortTable('owedFile2')">Owed (File 2) <span class="sort-icon">↕</span></th>
+                                <th data-sort="difference" onclick="sortTable('difference')">Difference <span class="sort-icon">↕</span></th>
+                                <th data-sort="status" onclick="sortTable('status')">Status <span class="sort-icon">↕</span></th>
                             </tr>
                         </thead>
                         <tbody id="resultsTable"></tbody>
@@ -482,7 +501,7 @@
         </div>
 
         <footer>
-            <p>Transaction Reconciliation Tool</p>
+            <p>© 2025 Durham Autohaus. All Rights Reserved.</p>
         </footer>
     </div>
 
@@ -594,12 +613,21 @@
             return totals;
         }
 
-        function extractTotalsWithMethod(data, customerCol, owedCol, methodCol) {
+        function extractTotalsWithMethod(data, customerCol, owedCol, methodCol, dateCol) {
             const totals = {};
+            const dates = {};
             let currentCustomer = null;
+            let lastKnownDate = null;  // Carry forward the last known date
 
             for (const row of data) {
                 const customerNo = row[customerCol];
+                const rowDate = row[dateCol];
+                
+                // Update last known date if we find a valid date
+                if (rowDate !== null && rowDate !== undefined && rowDate !== '' && !isNaN(new Date(rowDate).getTime())) {
+                    lastKnownDate = rowDate;
+                }
+                
                 if (customerNo !== null && customerNo !== undefined && !isNaN(customerNo)) {
                     currentCustomer = Math.floor(customerNo);
                 }
@@ -607,11 +635,12 @@
                 const method = row[methodCol];
                 if (method === 'Total' && currentCustomer !== null) {
                     totals[currentCustomer] = row[owedCol];
+                    dates[currentCustomer] = lastKnownDate;  // Use last known date
                     currentCustomer = null;
                 }
             }
 
-            return totals;
+            return { totals, dates };
         }
 
         function getDateRange(data, dateCol) {
@@ -639,40 +668,46 @@
 
         function extractTotalsByPatternWithDateFilter(data, customerCol, owedCol, dateCol, minDate, maxDate) {
             const totals = {};
+            const dates = {};
             let currentCustomer = null;
-            let currentDate = null;
+            let lastKnownDate = null;  // Carry forward the last known date
+            let currentCustomerDate = null;
             let lastOwed = null;
 
             for (const row of data) {
                 const customerNo = row[customerCol];
                 const rowDate = row[dateCol];
                 
+                // Update last known date if we find a valid date
+                if (rowDate !== null && rowDate !== undefined && rowDate !== '' && !isNaN(new Date(rowDate).getTime())) {
+                    lastKnownDate = rowDate;
+                }
+                
                 if (customerNo !== null && customerNo !== undefined && !isNaN(customerNo)) {
                     // Save previous customer if within date range
-                    if (currentCustomer !== null && lastOwed !== null && currentDate !== null) {
-                        const d = currentDate instanceof Date ? currentDate : new Date(currentDate);
+                    if (currentCustomer !== null && lastOwed !== null && currentCustomerDate !== null) {
+                        const d = currentCustomerDate instanceof Date ? currentCustomerDate : new Date(currentCustomerDate);
                         if (!isNaN(d.getTime()) && d >= minDate && d <= maxDate) {
                             totals[currentCustomer] = lastOwed;
+                            dates[currentCustomer] = currentCustomerDate;
                         }
                     }
                     currentCustomer = Math.floor(customerNo);
-                    // Capture the date from the first row of each customer block
-                    if (rowDate !== null && rowDate !== undefined && rowDate !== '') {
-                        currentDate = rowDate;
-                    }
+                    currentCustomerDate = lastKnownDate;  // Use last known date for this customer
                 }
                 lastOwed = row[owedCol];
             }
 
             // Don't forget the last customer
-            if (currentCustomer !== null && lastOwed !== null && currentDate !== null) {
-                const d = currentDate instanceof Date ? currentDate : new Date(currentDate);
+            if (currentCustomer !== null && lastOwed !== null && currentCustomerDate !== null) {
+                const d = currentCustomerDate instanceof Date ? currentCustomerDate : new Date(currentCustomerDate);
                 if (!isNaN(d.getTime()) && d >= minDate && d <= maxDate) {
                     totals[currentCustomer] = lastOwed;
+                    dates[currentCustomer] = currentCustomerDate;
                 }
             }
 
-            return totals;
+            return { totals, dates };
         }
 
         function runReconciliation() {
@@ -695,10 +730,15 @@
                     const dateRange = getDateRange(file2Data, dateCol2);
 
                     // Extract totals (File 1 filtered by date range)
-                    const file1Totals = extractTotalsByPatternWithDateFilter(
+                    const file1Result = extractTotalsByPatternWithDateFilter(
                         file1Data, customerCol1, owedCol1, dateCol1, dateRange.min, dateRange.max
                     );
-                    const file2Totals = extractTotalsWithMethod(file2Data, customerCol2, owedCol2, methodCol2);
+                    const file1Totals = file1Result.totals;
+                    const file1Dates = file1Result.dates;
+                    
+                    const file2Result = extractTotalsWithMethod(file2Data, customerCol2, owedCol2, methodCol2, dateCol2);
+                    const file2Totals = file2Result.totals;
+                    const file2Dates = file2Result.dates;
 
                     // Get all unique customer codes
                     const allCustomers = new Set([
@@ -713,6 +753,8 @@
                     for (const customer of allCustomers) {
                         const owed1 = file1Totals[customer];
                         const owed2 = file2Totals[customer];
+                        // Use date from File 1 if available, otherwise from File 2
+                        const serviceDate = file1Dates[customer] || file2Dates[customer];
 
                         let status, difference = null;
 
@@ -738,6 +780,7 @@
                         }
 
                         results.push({
+                            serviceDate: serviceDate,
                             customerCode: customer,
                             owedFile1: owed1,
                             owedFile2: owed2,
@@ -780,6 +823,93 @@
             }, 500);
         }
 
+        let currentSort = { column: null, direction: 'asc' };
+
+        function sortTable(column) {
+            // Toggle direction if same column, otherwise default to asc
+            if (currentSort.column === column) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.column = column;
+                currentSort.direction = 'asc';
+            }
+
+            // Sort the data
+            reconciliationResults.details.sort((a, b) => {
+                let valA = a[column];
+                let valB = b[column];
+
+                // Handle dates
+                if (column === 'serviceDate') {
+                    valA = valA ? new Date(valA).getTime() : 0;
+                    valB = valB ? new Date(valB).getTime() : 0;
+                }
+
+                // Handle nulls/undefined
+                if (valA === undefined || valA === null) valA = column === 'status' ? '' : -Infinity;
+                if (valB === undefined || valB === null) valB = column === 'status' ? '' : -Infinity;
+
+                // Compare
+                let result = 0;
+                if (typeof valA === 'string' && typeof valB === 'string') {
+                    result = valA.localeCompare(valB);
+                } else {
+                    result = valA < valB ? -1 : valA > valB ? 1 : 0;
+                }
+
+                return currentSort.direction === 'asc' ? result : -result;
+            });
+
+            // Update header icons
+            document.querySelectorAll('th').forEach(th => {
+                th.classList.remove('sorted');
+                const icon = th.querySelector('.sort-icon');
+                if (icon) icon.textContent = '↕';
+            });
+
+            const activeHeader = document.querySelector(`th[data-sort="${column}"]`);
+            if (activeHeader) {
+                activeHeader.classList.add('sorted');
+                const icon = activeHeader.querySelector('.sort-icon');
+                if (icon) icon.textContent = currentSort.direction === 'asc' ? '↑' : '↓';
+            }
+
+            // Re-render table
+            renderTable();
+        }
+
+        function renderTable() {
+            const r = reconciliationResults;
+            const tbody = document.getElementById('resultsTable');
+            tbody.innerHTML = '';
+
+            for (const row of r.details) {
+                const tr = document.createElement('tr');
+
+                const statusClass = row.status === 'MATCH' ? 'status-match' : 
+                                   row.status === 'MISMATCH' ? 'status-mismatch' : 'status-notfound';
+
+                let dateDisplay = '-';
+                if (row.serviceDate) {
+                    const d = row.serviceDate instanceof Date ? row.serviceDate : new Date(row.serviceDate);
+                    if (!isNaN(d.getTime())) {
+                        dateDisplay = d.toISOString().split('T')[0];
+                    }
+                }
+
+                tr.innerHTML = `
+                    <td>${dateDisplay}</td>
+                    <td>${row.customerCode}</td>
+                    <td>${row.owedFile1 !== undefined ? row.owedFile1.toFixed(2) : '-'}</td>
+                    <td>${row.owedFile2 !== undefined ? row.owedFile2.toFixed(2) : '-'}</td>
+                    <td>${row.difference !== null ? row.difference.toFixed(2) : '-'}</td>
+                    <td><span class="status-badge ${statusClass}">${row.status}</span></td>
+                `;
+
+                tbody.appendChild(tr);
+            }
+        }
+
         function displayResults() {
             const r = reconciliationResults;
 
@@ -794,25 +924,15 @@
             document.getElementById('totalMismatches').textContent = r.mismatches;
             document.getElementById('totalNotFound').textContent = r.notFoundInF2 + r.notFoundInF1;
 
-            const tbody = document.getElementById('resultsTable');
-            tbody.innerHTML = '';
+            // Reset sort state
+            currentSort = { column: null, direction: 'asc' };
+            document.querySelectorAll('th').forEach(th => {
+                th.classList.remove('sorted');
+                const icon = th.querySelector('.sort-icon');
+                if (icon) icon.textContent = '↕';
+            });
 
-            for (const row of r.details) {
-                const tr = document.createElement('tr');
-
-                const statusClass = row.status === 'MATCH' ? 'status-match' : 
-                                   row.status === 'MISMATCH' ? 'status-mismatch' : 'status-notfound';
-
-                tr.innerHTML = `
-                    <td>${row.customerCode}</td>
-                    <td>${row.owedFile1 !== undefined ? row.owedFile1.toFixed(2) : '-'}</td>
-                    <td>${row.owedFile2 !== undefined ? row.owedFile2.toFixed(2) : '-'}</td>
-                    <td>${row.difference !== null ? row.difference.toFixed(2) : '-'}</td>
-                    <td><span class="status-badge ${statusClass}">${row.status}</span></td>
-                `;
-
-                tbody.appendChild(tr);
-            }
+            renderTable();
 
             resultsDiv.classList.add('show');
             downloadBtn.style.display = 'inline-flex';
@@ -836,12 +956,20 @@
                 ['Not Found in File 2:', r.notFoundInF2],
                 ['Not Found in File 1:', r.notFoundInF1],
                 [''],
-                ['Customer Code', 'Owed (File 1)', 'Owed (File 2)', 'Difference', 'Status']
+                ['Service Date', 'Customer Code', 'Owed (File 1)', 'Owed (File 2)', 'Difference', 'Status']
             ];
 
             // Add detail rows
             for (const row of r.details) {
+                let dateDisplay = '';
+                if (row.serviceDate) {
+                    const d = row.serviceDate instanceof Date ? row.serviceDate : new Date(row.serviceDate);
+                    if (!isNaN(d.getTime())) {
+                        dateDisplay = d.toISOString().split('T')[0];
+                    }
+                }
                 summaryData.push([
+                    dateDisplay,
                     row.customerCode,
                     row.owedFile1 !== undefined ? row.owedFile1 : '',
                     row.owedFile2 !== undefined ? row.owedFile2 : '',
@@ -854,6 +982,7 @@
 
             // Set column widths
             ws['!cols'] = [
+                { wch: 14 },
                 { wch: 15 },
                 { wch: 15 },
                 { wch: 15 },
