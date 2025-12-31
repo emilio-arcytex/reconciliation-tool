@@ -393,6 +393,49 @@
             font-family: 'JetBrains Mono', monospace;
         }
 
+        .service-summary {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .service-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .service-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        .service-item .service-name {
+            color: var(--text-secondary);
+        }
+
+        .service-item .service-stats {
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .service-item .service-count {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .service-item .service-total {
+            color: var(--success);
+            font-size: 0.85rem;
+        }
+
         footer {
             text-align: center;
             margin-top: 48px;
@@ -478,6 +521,11 @@
                 </div>
             </div>
 
+            <div class="service-summary" id="serviceSummary" style="display: none;">
+                <h3 style="margin-bottom: 16px; font-size: 1.1rem;">Service Breakdown</h3>
+                <div class="service-grid" id="serviceGrid"></div>
+            </div>
+
             <div class="table-container">
                 <div class="table-header">
                     <h2>Reconciliation Details</h2>
@@ -488,6 +536,7 @@
                             <tr>
                                 <th data-sort="serviceDate" onclick="sortTable('serviceDate')">Service Date <span class="sort-icon">↕</span></th>
                                 <th data-sort="customerCode" onclick="sortTable('customerCode')">Customer Code <span class="sort-icon">↕</span></th>
+                                <th data-sort="servicesDisplay" onclick="sortTable('servicesDisplay')">Services <span class="sort-icon">↕</span></th>
                                 <th data-sort="owedFile1" onclick="sortTable('owedFile1')">Owed (File 1) <span class="sort-icon">↕</span></th>
                                 <th data-sort="owedFile2" onclick="sortTable('owedFile2')">Owed (File 2) <span class="sort-icon">↕</span></th>
                                 <th data-sort="difference" onclick="sortTable('difference')">Difference <span class="sort-icon">↕</span></th>
@@ -506,6 +555,28 @@
     </div>
 
     <script>
+        // SSC Payout Rates
+        const PAYOUT_RATES = {
+            'Install': 145,
+            'Installation': 145,
+            'Special Vehicle Install': 75,  // Added to base
+            'Special Install': 75,
+            'Transfer': 145,
+            'Service': 20,  // Calibration
+            'Calibration': 20,
+            'Violation Reset': 20,
+            'Unlock Code': 20,
+            'Unscheduled Service': 20,
+            'Removal': 30,
+            'Special Vehicle Removal': 75,  // Added to base
+            'Special Removal': 75,
+            'Missed Install': 50,
+            'Missed Service': 20,
+            'Missed Removal': 20,
+            'Missed Other': 20,
+            'Cord Replacement': 20
+        };
+
         let file1Data = null;
         let file2Data = null;
         let reconciliationResults = null;
@@ -531,14 +602,43 @@
                 const data = new Uint8Array(event.target.result);
                 const workbook = XLSX.read(data, { type: 'array', cellDates: true });
                 const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: null });
+                
+                // First, read without header to detect structure
+                let jsonData = XLSX.utils.sheet_to_json(sheet, { defval: null, header: 1 });
+                
+                // Find the row containing "Customer No." or "Customer No"
+                let headerRowIndex = 0;
+                for (let i = 0; i < Math.min(10, jsonData.length); i++) {
+                    const rowStr = JSON.stringify(jsonData[i]);
+                    if (rowStr.includes('Customer No') || rowStr.includes('Customer Code')) {
+                        headerRowIndex = i;
+                        break;
+                    }
+                }
+                
+                // Re-read with correct header
+                const headerRow = jsonData[headerRowIndex];
+                const dataRows = jsonData.slice(headerRowIndex + 1);
+                
+                // Convert to array of objects
+                const normalizedData = dataRows.map(row => {
+                    const obj = {};
+                    headerRow.forEach((col, idx) => {
+                        if (col) {
+                            obj[col] = row[idx];
+                        } else {
+                            obj[`Unnamed: ${idx}`] = row[idx];
+                        }
+                    });
+                    return obj;
+                });
 
                 if (fileNum === 1) {
-                    file1Data = jsonData;
+                    file1Data = normalizedData;
                     document.getElementById('upload1').classList.add('has-file');
                     document.getElementById('file1-name').textContent = file.name;
                 } else {
-                    file2Data = jsonData;
+                    file2Data = normalizedData;
                     document.getElementById('upload2').classList.add('has-file');
                     document.getElementById('file2-name').textContent = file.name;
                 }
@@ -549,6 +649,7 @@
         }
 
         function findCustomerColumn(data) {
+            if (!data || data.length === 0) return null;
             const row = data[0];
             for (const key of Object.keys(row)) {
                 const lowerKey = key.toLowerCase();
@@ -560,7 +661,14 @@
         }
 
         function findOwedColumn(data) {
+            if (!data || data.length === 0) return null;
             const row = data[0];
+            for (const key of Object.keys(row)) {
+                if (key.toLowerCase() === 'owed') {
+                    return key;
+                }
+            }
+            // Fallback: look for columns containing 'owed'
             for (const key of Object.keys(row)) {
                 if (key.toLowerCase().includes('owed')) {
                     return key;
@@ -570,7 +678,13 @@
         }
 
         function findMethodColumn(data) {
+            if (!data || data.length === 0) return null;
             const row = data[0];
+            for (const key of Object.keys(row)) {
+                if (key.toLowerCase() === 'method') {
+                    return key;
+                }
+            }
             for (const key of Object.keys(row)) {
                 if (key.toLowerCase().includes('method')) {
                     return key;
@@ -580,7 +694,16 @@
         }
 
         function findDateColumn(data) {
+            if (!data || data.length === 0) return null;
             const row = data[0];
+            // First, look for exact matches
+            for (const key of Object.keys(row)) {
+                const lowerKey = key.toLowerCase();
+                if (lowerKey === 'service date' || lowerKey === 'transaction date') {
+                    return key;
+                }
+            }
+            // Then look for partial matches
             for (const key of Object.keys(row)) {
                 const lowerKey = key.toLowerCase();
                 if (lowerKey.includes('date') && (lowerKey.includes('service') || lowerKey.includes('transaction'))) {
@@ -588,6 +711,49 @@
                 }
             }
             return null;
+        }
+
+        function findChargesColumn(data) {
+            if (!data || data.length === 0) return null;
+            const row = data[0];
+            for (const key of Object.keys(row)) {
+                if (key.toLowerCase() === 'charges') {
+                    return key;
+                }
+            }
+            for (const key of Object.keys(row)) {
+                if (key.toLowerCase().includes('charges')) {
+                    return key;
+                }
+            }
+            return null;
+        }
+
+        function findFeesColumn(data) {
+            if (!data || data.length === 0) return null;
+            const row = data[0];
+            for (const key of Object.keys(row)) {
+                if (key.toLowerCase() === 'fees') {
+                    return key;
+                }
+            }
+            return null;
+        }
+
+        function calculateExpectedPayout(servicesList) {
+            if (!servicesList || servicesList.length === 0) return 0;
+            
+            let total = 0;
+            for (const service of servicesList) {
+                const rate = PAYOUT_RATES[service.type] || 0;
+                total += rate;
+            }
+            return total;
+        }
+
+        function formatServices(servicesList) {
+            if (!servicesList || servicesList.length === 0) return '-';
+            return servicesList.map(s => s.type).join(', ');
         }
 
         function extractTotalsByPattern(data, customerCol, owedCol) {
@@ -613,15 +779,18 @@
             return totals;
         }
 
-        function extractTotalsWithMethod(data, customerCol, owedCol, methodCol, dateCol) {
+        function extractTotalsWithMethod(data, customerCol, owedCol, methodCol, dateCol, chargesCol, feesCol) {
             const totals = {};
             const dates = {};
+            const services = {};
             let currentCustomer = null;
-            let lastKnownDate = null;  // Carry forward the last known date
+            let lastKnownDate = null;
+            let currentServices = [];
 
             for (const row of data) {
                 const customerNo = row[customerCol];
                 const rowDate = row[dateCol];
+                const charge = row[chargesCol];
                 
                 // Update last known date if we find a valid date
                 if (rowDate !== null && rowDate !== undefined && rowDate !== '' && !isNaN(new Date(rowDate).getTime())) {
@@ -630,17 +799,29 @@
                 
                 if (customerNo !== null && customerNo !== undefined && !isNaN(customerNo)) {
                     currentCustomer = Math.floor(customerNo);
+                    currentServices = [];
+                }
+
+                // Collect service types (from Charges column)
+                if (charge && typeof charge === 'string' && charge !== 'Fees' && charge !== 'Total Fees' && PAYOUT_RATES[charge] !== undefined) {
+                    const feeAmount = feesCol ? Math.abs(row[feesCol] || 0) : Math.abs(row[owedCol] || 0);
+                    currentServices.push({
+                        type: charge,
+                        amount: feeAmount
+                    });
                 }
 
                 const method = row[methodCol];
                 if (method === 'Total' && currentCustomer !== null) {
                     totals[currentCustomer] = row[owedCol];
-                    dates[currentCustomer] = lastKnownDate;  // Use last known date
+                    dates[currentCustomer] = lastKnownDate;
+                    services[currentCustomer] = [...currentServices];
                     currentCustomer = null;
+                    currentServices = [];
                 }
             }
 
-            return { totals, dates };
+            return { totals, dates, services };
         }
 
         function getDateRange(data, dateCol) {
@@ -725,6 +906,8 @@
                     const owedCol2 = findOwedColumn(file2Data);
                     const methodCol2 = findMethodColumn(file2Data);
                     const dateCol2 = findDateColumn(file2Data);
+                    const chargesCol2 = findChargesColumn(file2Data);
+                    const feesCol2 = findFeesColumn(file2Data);
 
                     // Get date range from File 2
                     const dateRange = getDateRange(file2Data, dateCol2);
@@ -736,9 +919,10 @@
                     const file1Totals = file1Result.totals;
                     const file1Dates = file1Result.dates;
                     
-                    const file2Result = extractTotalsWithMethod(file2Data, customerCol2, owedCol2, methodCol2, dateCol2);
+                    const file2Result = extractTotalsWithMethod(file2Data, customerCol2, owedCol2, methodCol2, dateCol2, chargesCol2, feesCol2);
                     const file2Totals = file2Result.totals;
                     const file2Dates = file2Result.dates;
+                    const file2Services = file2Result.services;
 
                     // Get all unique customer codes
                     const allCustomers = new Set([
@@ -749,14 +933,28 @@
                     // Compare
                     const results = [];
                     let matches = 0, mismatches = 0, notFoundInF2 = 0, notFoundInF1 = 0;
+                    let payoutDiscrepancies = 0;
+                    const serviceSummary = {};
 
                     for (const customer of allCustomers) {
                         const owed1 = file1Totals[customer];
                         const owed2 = file2Totals[customer];
                         // Use date from File 1 if available, otherwise from File 2
                         const serviceDate = file1Dates[customer] || file2Dates[customer];
+                        const servicesList = file2Services[customer] || [];
+                        const expectedPayout = calculateExpectedPayout(servicesList);
+
+                        // Track service summary
+                        for (const svc of servicesList) {
+                            if (!serviceSummary[svc.type]) {
+                                serviceSummary[svc.type] = { count: 0, total: 0 };
+                            }
+                            serviceSummary[svc.type].count++;
+                            serviceSummary[svc.type].total += PAYOUT_RATES[svc.type] || 0;
+                        }
 
                         let status, difference = null;
+                        let payoutStatus = '';
 
                         if (owed1 === undefined) {
                             status = 'NOT FOUND in File 1';
@@ -777,15 +975,25 @@
                                 status = 'MISMATCH';
                                 mismatches++;
                             }
+
+                            // Check if actual payout matches expected
+                            if (expectedPayout > 0 && Math.abs(absOwed2 - expectedPayout) > 0.01) {
+                                payoutStatus = `Expected: $${expectedPayout}`;
+                                payoutDiscrepancies++;
+                            }
                         }
 
                         results.push({
                             serviceDate: serviceDate,
                             customerCode: customer,
+                            services: servicesList,
+                            servicesDisplay: formatServices(servicesList),
+                            expectedPayout: expectedPayout,
                             owedFile1: owed1,
                             owedFile2: owed2,
                             difference: difference,
-                            status: status
+                            status: status,
+                            payoutStatus: payoutStatus
                         });
                     }
 
@@ -809,6 +1017,8 @@
                         mismatches: mismatches,
                         notFoundInF2: notFoundInF2,
                         notFoundInF1: notFoundInF1,
+                        payoutDiscrepancies: payoutDiscrepancies,
+                        serviceSummary: serviceSummary,
                         details: results
                     };
 
@@ -900,6 +1110,7 @@
                 tr.innerHTML = `
                     <td>${dateDisplay}</td>
                     <td>${row.customerCode}</td>
+                    <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
                     <td>${row.owedFile1 !== undefined ? row.owedFile1.toFixed(2) : '-'}</td>
                     <td>${row.owedFile2 !== undefined ? row.owedFile2.toFixed(2) : '-'}</td>
                     <td>${row.difference !== null ? row.difference.toFixed(2) : '-'}</td>
@@ -924,6 +1135,47 @@
             document.getElementById('totalMismatches').textContent = r.mismatches;
             document.getElementById('totalNotFound').textContent = r.notFoundInF2 + r.notFoundInF1;
 
+            // Display service summary
+            const serviceSummaryDiv = document.getElementById('serviceSummary');
+            const serviceGrid = document.getElementById('serviceGrid');
+            serviceGrid.innerHTML = '';
+
+            const serviceEntries = Object.entries(r.serviceSummary);
+            if (serviceEntries.length > 0) {
+                serviceSummaryDiv.style.display = 'block';
+                
+                // Calculate total payout
+                let totalPayout = 0;
+                for (const [serviceName, data] of serviceEntries) {
+                    totalPayout += data.total;
+                    const item = document.createElement('div');
+                    item.className = 'service-item';
+                    item.innerHTML = `
+                        <span class="service-name">${serviceName}</span>
+                        <span class="service-stats">
+                            <span class="service-count">${data.count}x</span>
+                            <span class="service-total">$${data.total.toFixed(2)}</span>
+                        </span>
+                    `;
+                    serviceGrid.appendChild(item);
+                }
+
+                // Add total
+                const totalItem = document.createElement('div');
+                totalItem.className = 'service-item';
+                totalItem.style.background = 'var(--accent)';
+                totalItem.style.color = 'white';
+                totalItem.innerHTML = `
+                    <span class="service-name" style="color: white; font-weight: 600;">TOTAL EXPECTED PAYOUT</span>
+                    <span class="service-stats">
+                        <span class="service-total" style="color: white; font-size: 1rem; font-weight: 700;">$${totalPayout.toFixed(2)}</span>
+                    </span>
+                `;
+                serviceGrid.appendChild(totalItem);
+            } else {
+                serviceSummaryDiv.style.display = 'none';
+            }
+
             // Reset sort state
             currentSort = { column: null, direction: 'asc' };
             document.querySelectorAll('th').forEach(th => {
@@ -944,6 +1196,12 @@
             // Create workbook
             const wb = XLSX.utils.book_new();
 
+            // Calculate total expected payout
+            let totalExpectedPayout = 0;
+            for (const [serviceName, data] of Object.entries(r.serviceSummary)) {
+                totalExpectedPayout += data.total;
+            }
+
             // Summary data
             const summaryData = [
                 ['RECONCILIATION SUMMARY'],
@@ -956,8 +1214,18 @@
                 ['Not Found in File 2:', r.notFoundInF2],
                 ['Not Found in File 1:', r.notFoundInF1],
                 [''],
-                ['Service Date', 'Customer Code', 'Owed (File 1)', 'Owed (File 2)', 'Difference', 'Status']
+                ['SERVICE BREAKDOWN'],
+                ['']
             ];
+
+            // Add service breakdown
+            for (const [serviceName, data] of Object.entries(r.serviceSummary)) {
+                summaryData.push([serviceName, `${data.count}x`, `$${data.total.toFixed(2)}`]);
+            }
+            summaryData.push(['TOTAL EXPECTED PAYOUT', '', `$${totalExpectedPayout.toFixed(2)}`]);
+            summaryData.push(['']);
+            summaryData.push(['TRANSACTION DETAILS']);
+            summaryData.push(['Service Date', 'Customer Code', 'Services', 'Owed (File 1)', 'Owed (File 2)', 'Difference', 'Status']);
 
             // Add detail rows
             for (const row of r.details) {
@@ -971,6 +1239,7 @@
                 summaryData.push([
                     dateDisplay,
                     row.customerCode,
+                    row.servicesDisplay,
                     row.owedFile1 !== undefined ? row.owedFile1 : '',
                     row.owedFile2 !== undefined ? row.owedFile2 : '',
                     row.difference !== null ? row.difference : '',
@@ -984,6 +1253,7 @@
             ws['!cols'] = [
                 { wch: 14 },
                 { wch: 15 },
+                { wch: 35 },
                 { wch: 15 },
                 { wch: 15 },
                 { wch: 12 },
