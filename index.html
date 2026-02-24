@@ -651,6 +651,10 @@
         reconcileBtn.addEventListener('click', runReconciliation);
         downloadBtn.addEventListener('click', downloadReport);
 
+        // Auto-fetch File 1 on page load
+        window.addEventListener('DOMContentLoaded', () => fetchFromDrive());
+        if (document.readyState !== 'loading') fetchFromDrive();
+
         // ============================================================
         // CSV PARSER (handles quoted fields, commas inside quotes, etc.)
         // ============================================================
@@ -1275,10 +1279,10 @@
                         let payoutStatus = '';
 
                         if (owed1 === undefined) {
-                            status = 'NOT FOUND in File 1';
+                            status = 'NOT FOUND in Transactions Record';
                             notFoundInF1++;
                         } else if (owed2 === undefined) {
-                            status = 'NOT FOUND in File 2';
+                            status = 'NOT FOUND in SSC Payroll';
                             notFoundInF2++;
                         } else {
                             const absOwed1 = Math.abs(owed1);
@@ -1316,7 +1320,7 @@
 
                     // Sort: mismatches first, then not found, then matches
                     results.sort((a, b) => {
-                        const order = { 'MISMATCH': 0, 'NOT FOUND in File 2': 1, 'NOT FOUND in File 1': 2, 'MATCH': 3 };
+                        const order = { 'MISMATCH': 0, 'NOT FOUND in SSC Payroll': 1, 'NOT FOUND in Transactions Record': 2, 'MATCH': 3 };
                         return (order[a.status] || 9) - (order[b.status] || 9);
                     });
 
@@ -1521,8 +1525,8 @@
                 ['Excluded by Date Range:', r.excludedByDate],
                 ['Matches:', r.matches],
                 ['Mismatches:', r.mismatches],
-                ['Not Found in File 2:', r.notFoundInF2],
-                ['Not Found in File 1:', r.notFoundInF1],
+                ['Not Found in SSC Payroll:', r.notFoundInF2],
+                ['Not Found in Transactions Record:', r.notFoundInF1],
                 [''],
                 ['SERVICE BREAKDOWN'],
                 ['']
