@@ -1,0 +1,1564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Durham Autohaus - Transaction Reconciliation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #141414;
+            --bg-tertiary: #1c1c1c;
+            --border-color: #2a2a2a;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --accent: #c41e3a;
+            --accent-hover: #e02244;
+            --success: #22c55e;
+            --success-bg: rgba(34, 197, 94, 0.15);
+            --error: #ef4444;
+            --error-bg: rgba(239, 68, 68, 0.15);
+            --warning: #eab308;
+            --warning-bg: rgba(234, 179, 8, 0.15);
+        }
+
+        body {
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        .upload-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        @media (max-width: 768px) {
+            .upload-section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .upload-card {
+            background: var(--bg-secondary);
+            border: 2px dashed var(--border-color);
+            border-radius: 16px;
+            padding: 32px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .upload-card:hover {
+            border-color: var(--accent);
+            background: var(--bg-tertiary);
+        }
+
+        .upload-card.has-file {
+            border-style: solid;
+            border-color: var(--success);
+        }
+
+        .upload-card input {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .upload-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 16px;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .upload-icon svg {
+            width: 24px;
+            height: 24px;
+            stroke: var(--accent);
+        }
+
+        .upload-card h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .upload-card p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .file-name {
+            margin-top: 12px;
+            padding: 8px 16px;
+            background: var(--success-bg);
+            border-radius: 8px;
+            color: var(--success);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            display: none;
+        }
+
+        .upload-card.has-file .file-name {
+            display: inline-block;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px 32px;
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: inherit;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(196, 30, 58, 0.3);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-color);
+        }
+
+        .actions {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            margin-bottom: 48px;
+        }
+
+        .results {
+            display: none;
+        }
+
+        .results.show {
+            display: block;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .summary-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .summary-card.match {
+            border-color: var(--success);
+            background: var(--success-bg);
+        }
+
+        .summary-card.mismatch {
+            border-color: var(--error);
+            background: var(--error-bg);
+        }
+
+        .summary-card.warning {
+            border-color: var(--warning);
+            background: var(--warning-bg);
+        }
+
+        .summary-value {
+            font-size: 2rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .summary-card.match .summary-value { color: var(--success); }
+        .summary-card.mismatch .summary-value { color: var(--error); }
+        .summary-card.warning .summary-value { color: var(--warning); }
+
+        .summary-label {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-top: 4px;
+        }
+
+        .table-container {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .table-header h2 {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .table-scroll {
+            overflow-x: auto;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 14px 20px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: var(--bg-tertiary);
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            position: sticky;
+            top: 0;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s ease;
+        }
+
+        th:hover {
+            background: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        th .sort-icon {
+            margin-left: 6px;
+            opacity: 0.4;
+        }
+
+        th.sorted .sort-icon {
+            opacity: 1;
+            color: var(--accent);
+        }
+
+        td {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+        }
+
+        tr:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            font-family: 'DM Sans', sans-serif;
+        }
+
+        .status-match {
+            background: var(--success-bg);
+            color: var(--success);
+        }
+
+        .status-mismatch {
+            background: var(--error-bg);
+            color: var(--error);
+        }
+
+        .status-notfound {
+            background: var(--warning-bg);
+            color: var(--warning);
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 48px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .date-range {
+            text-align: center;
+            margin-bottom: 24px;
+            padding: 16px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .date-range span {
+            color: var(--accent);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .service-summary {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .service-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .service-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        .service-item .service-name {
+            color: var(--text-secondary);
+        }
+
+        .service-item .service-stats {
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .service-item .service-count {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .service-item .service-total {
+            color: var(--success);
+            font-size: 0.85rem;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 48px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .btn-fetch {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 16px;
+            padding: 10px 24px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 2;
+        }
+
+        .btn-fetch:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(196, 30, 58, 0.3);
+        }
+
+        .btn-fetch:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-fetch.loading {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+
+        .fetch-error {
+            margin-top: 8px;
+            font-size: 0.8rem;
+            color: var(--error);
+            display: none;
+        }
+
+        .fetch-error.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Transaction Reconciliation</h1>
+            <p class="subtitle">Compare and reconcile transactions between two Excel files</p>
+        </header>
+
+        <div class="upload-section">
+            <div class="upload-card" id="upload1">
+                <div class="upload-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.338-2.338 4.502 4.502 0 013.516 5.307A4.5 4.5 0 0118 19.5H6.75z" />
+                    </svg>
+                </div>
+                <h3>File 1 — Your Transactions</h3>
+                <p>Auto-fetch from Google Sheets</p>
+                <button class="btn-fetch" id="fetchBtn" onclick="fetchFromDrive()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    Fetch from Drive
+                </button>
+                <div class="file-name" id="file1-name"></div>
+                <div class="fetch-error" id="fetchError"></div>
+            </div>
+
+            <div class="upload-card" id="upload2">
+                <input type="file" id="file2" accept=".xlsx,.xls" />
+                <div class="upload-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12l-3-3m0 0l-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                    </svg>
+                </div>
+                <h3>File 2 — Vendor Payroll</h3>
+                <p>Upload the file provided every 15 days</p>
+                <div class="file-name" id="file2-name"></div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="btn btn-primary" id="reconcileBtn" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Run Reconciliation
+            </button>
+            <button class="btn btn-secondary" id="downloadBtn" style="display: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+                Download Report
+            </button>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Processing files...</p>
+        </div>
+
+        <div class="results" id="results">
+            <div class="date-range" id="dateRange"></div>
+
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <div class="summary-value" id="totalAnalyzed">0</div>
+                    <div class="summary-label">Rows Analyzed</div>
+                </div>
+                <div class="summary-card match">
+                    <div class="summary-value" id="totalMatches">0</div>
+                    <div class="summary-label">Matches</div>
+                </div>
+                <div class="summary-card mismatch">
+                    <div class="summary-value" id="totalMismatches">0</div>
+                    <div class="summary-label">Mismatches</div>
+                </div>
+                <div class="summary-card warning">
+                    <div class="summary-value" id="totalNotFound">0</div>
+                    <div class="summary-label">Not Found</div>
+                </div>
+            </div>
+
+            <div class="service-summary" id="serviceSummary" style="display: none;">
+                <h3 style="margin-bottom: 16px; font-size: 1.1rem;">Service Breakdown</h3>
+                <div class="service-grid" id="serviceGrid"></div>
+            </div>
+
+            <div class="table-container">
+                <div class="table-header">
+                    <h2>Reconciliation Details</h2>
+                </div>
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-sort="serviceDate" onclick="sortTable('serviceDate')">Service Date <span class="sort-icon">↕</span></th>
+                                <th data-sort="customerCode" onclick="sortTable('customerCode')">Customer Code <span class="sort-icon">↕</span></th>
+                                <th data-sort="servicesDisplay" onclick="sortTable('servicesDisplay')">Services <span class="sort-icon">↕</span></th>
+                                <th data-sort="owedFile1" onclick="sortTable('owedFile1')">Owed (File 1) <span class="sort-icon">↕</span></th>
+                                <th data-sort="owedFile2" onclick="sortTable('owedFile2')">Owed (File 2) <span class="sort-icon">↕</span></th>
+                                <th data-sort="difference" onclick="sortTable('difference')">Difference <span class="sort-icon">↕</span></th>
+                                <th data-sort="status" onclick="sortTable('status')">Status <span class="sort-icon">↕</span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>© 2025 Durham Autohaus. All Rights Reserved.</p>
+        </footer>
+    </div>
+
+    <script>
+        // SSC Payout Rates
+        const PAYOUT_RATES = {
+            'Install': 145,
+            'Installation': 145,
+            'Special Vehicle Install': 75,
+            'Special Install': 75,
+            'Transfer': 145,
+            'Service': 20,
+            'Calibration': 20,
+            'Violation Reset': 20,
+            'Unlock Code': 20,
+            'Unscheduled Service': 20,
+            'Removal': 30,
+            'Special Vehicle Removal': 75,
+            'Special Removal': 75,
+            'Missed Install': 50,
+            'Missed Service': 20,
+            'Missed Removal': 20,
+            'Missed Other': 20,
+            'Cord Replacement': 20
+        };
+
+        // ============================================================
+        // GOOGLE SHEETS CONFIG
+        // ============================================================
+        const FILE1_SHEET_ID = '1p4iDPLa12PTjdoe3g8oh5gcTl124DZahRcZ89wcZYxk';
+        const FILE1_PUB_KEY = '2PACX-1vRvgp9W5hXgJIMJ0gNGmlu9heNt-1fX_jABbyyEwg3vMFAmAYABO1jDUYEwgeF1DT2Mww01kgutwBEB';
+
+        let file1Data = null;
+        let file2Data = null;
+        let reconciliationResults = null;
+
+        const file2Input = document.getElementById('file2');
+        const reconcileBtn = document.getElementById('reconcileBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const resultsDiv = document.getElementById('results');
+        const loadingDiv = document.getElementById('loading');
+
+        file2Input.addEventListener('change', (e) => handleFileUpload(e, 2));
+        reconcileBtn.addEventListener('click', runReconciliation);
+        downloadBtn.addEventListener('click', downloadReport);
+
+        // ============================================================
+        // CSV PARSER (handles quoted fields, commas inside quotes, etc.)
+        // ============================================================
+        function parseCSV(text) {
+            const rows = [];
+            let currentRow = [];
+            let currentField = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < text.length; i++) {
+                const ch = text[i];
+                const next = text[i + 1];
+
+                if (inQuotes) {
+                    if (ch === '"' && next === '"') {
+                        currentField += '"';
+                        i++; // skip escaped quote
+                    } else if (ch === '"') {
+                        inQuotes = false;
+                    } else {
+                        currentField += ch;
+                    }
+                } else {
+                    if (ch === '"') {
+                        inQuotes = true;
+                    } else if (ch === ',') {
+                        currentRow.push(currentField);
+                        currentField = '';
+                    } else if (ch === '\n' || (ch === '\r' && next === '\n')) {
+                        currentRow.push(currentField);
+                        currentField = '';
+                        if (currentRow.length > 1 || currentRow[0] !== '') {
+                            rows.push(currentRow);
+                        }
+                        currentRow = [];
+                        if (ch === '\r') i++; // skip \n after \r
+                    } else {
+                        currentField += ch;
+                    }
+                }
+            }
+            // Last field/row
+            if (currentField || currentRow.length > 0) {
+                currentRow.push(currentField);
+                rows.push(currentRow);
+            }
+            return rows;
+        }
+
+        // ============================================================
+        // CONVERT CSV ROWS TO NORMALIZED DATA OBJECTS
+        // ============================================================
+        function csvToNormalizedData(rows) {
+            if (!rows || rows.length < 2) throw new Error('Sheet appears empty');
+
+            // Find header row
+            let headerRowIndex = 0;
+            for (let i = 0; i < Math.min(10, rows.length); i++) {
+                const rowStr = rows[i].join(',');
+                if (rowStr.includes('Customer No') || rowStr.includes('Customer Code')) {
+                    headerRowIndex = i;
+                    break;
+                }
+            }
+
+            const headerRow = rows[headerRowIndex];
+            const dataRows = rows.slice(headerRowIndex + 1);
+
+            return dataRows.map(row => {
+                const obj = {};
+                headerRow.forEach((col, idx) => {
+                    let val = row[idx] !== undefined ? row[idx] : null;
+                    if (col && col.trim()) {
+                        const colName = col.trim();
+                        // Convert numeric values for non-date columns
+                        if (val !== null && val !== '' && !colName.toLowerCase().includes('date') &&
+                            !isNaN(Number(val)) && Number(val) !== 0) {
+                            val = Number(val);
+                        } else if (val === '') {
+                            val = null;
+                        }
+                        obj[colName] = val;
+                    }
+                });
+                return obj;
+            }).filter(row => Object.values(row).some(v => v !== null && v !== undefined));
+        }
+
+        // ============================================================
+        // FETCH FILE 1 FROM GOOGLE SHEETS
+        // Strategy 1: Published CSV export (cleanest)
+        // Strategy 2: JSONP via gviz endpoint (fallback)
+        // ============================================================
+        async function fetchFromDrive() {
+            const fetchBtn = document.getElementById('fetchBtn');
+            const fetchError = document.getElementById('fetchError');
+            const fileName = document.getElementById('file1-name');
+
+            fetchBtn.classList.add('loading');
+            fetchBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="animation: spin 1s linear infinite;">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
+                </svg>
+                Fetching...
+            `;
+            fetchError.classList.remove('show');
+
+            // Try Strategy 1: Published CSV export
+            try {
+                console.log('Trying CSV export...');
+                const csvUrl = `https://docs.google.com/spreadsheets/d/e/${FILE1_PUB_KEY}/pub?output=csv&cachebust=${Date.now()}`;
+                const response = await fetch(csvUrl);
+
+                if (response.ok) {
+                    const csvText = await response.text();
+                    if (csvText && csvText.length > 50 && !csvText.includes('<!DOCTYPE')) {
+                        const rows = parseCSV(csvText);
+                        const normalizedData = csvToNormalizedData(rows);
+                        onFetchSuccess(normalizedData, fetchBtn, fileName);
+                        return;
+                    }
+                }
+                console.log('CSV export failed, trying JSONP...');
+            } catch (e) {
+                console.log('CSV export error:', e.message, '— trying JSONP...');
+            }
+
+            // Try Strategy 2: JSONP via gviz
+            try {
+                const data = await fetchViaJSONP();
+                onFetchSuccess(data, fetchBtn, fileName);
+            } catch (e) {
+                console.error('All fetch strategies failed:', e);
+                fetchError.textContent = 'Could not load sheet. Check that it is Published to web (File → Share → Publish to web).';
+                fetchError.classList.add('show');
+                fetchBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    Retry Fetch
+                `;
+                fetchBtn.classList.remove('loading');
+            }
+        }
+
+        function fetchViaJSONP() {
+            return new Promise((resolve, reject) => {
+                const callbackName = '_sheetCB_' + Date.now();
+
+                const timeout = setTimeout(() => {
+                    cleanup();
+                    reject(new Error('JSONP timed out'));
+                }, 15000);
+
+                function cleanup() {
+                    clearTimeout(timeout);
+                    delete window[callbackName];
+                    const s = document.getElementById('sheetScript');
+                    if (s) s.remove();
+                }
+
+                window[callbackName] = function(response) {
+                    cleanup();
+                    try {
+                        if (response.status !== 'ok') {
+                            throw new Error(response.errors?.[0]?.message || 'Sheet error');
+                        }
+                        const table = response.table;
+                        const headers = table.cols.map(c => c.label || '');
+                        let useFirstRow = headers.every(h => h === '');
+                        let finalHeaders, dataRows;
+
+                        if (useFirstRow && table.rows.length > 0) {
+                            finalHeaders = table.rows[0].c.map(cell => cell ? String(cell.v || '') : '');
+                            dataRows = table.rows.slice(1);
+                        } else {
+                            finalHeaders = headers;
+                            dataRows = table.rows;
+                        }
+
+                        const normalizedData = dataRows.map(row => {
+                            const obj = {};
+                            finalHeaders.forEach((col, idx) => {
+                                const cell = row.c ? row.c[idx] : null;
+                                let val = cell ? cell.v : null;
+                                if (col) {
+                                    if (typeof val === 'string' && val.startsWith('Date(')) {
+                                        const m = val.match(/Date\((\d+),(\d+),(\d+)\)/);
+                                        if (m) val = new Date(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]));
+                                    }
+                                    obj[col] = val;
+                                }
+                            });
+                            return obj;
+                        }).filter(row => Object.values(row).some(v => v !== null && v !== undefined));
+
+                        resolve(normalizedData);
+                    } catch (e) {
+                        reject(e);
+                    }
+                };
+
+                const script = document.createElement('script');
+                script.id = 'sheetScript';
+                script.onerror = () => { cleanup(); reject(new Error('Script load failed')); };
+                script.src = `https://docs.google.com/spreadsheets/d/${FILE1_SHEET_ID}/gviz/tq?tqx=responseHandler:${callbackName}`;
+                document.head.appendChild(script);
+            });
+        }
+
+        function onFetchSuccess(normalizedData, fetchBtn, fileName) {
+            file1Data = normalizedData;
+            document.getElementById('upload1').classList.add('has-file');
+            fileName.textContent = `✓ Loaded ${normalizedData.length} rows from Google Sheets`;
+            fileName.style.display = 'inline-block';
+
+            fetchBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
+                </svg>
+                Refresh from Drive
+            `;
+            fetchBtn.classList.remove('loading');
+            document.getElementById('fetchError').classList.remove('show');
+
+            reconcileBtn.disabled = !(file1Data && file2Data);
+
+            console.log('File 1 loaded:', normalizedData.length, 'rows');
+            console.log('Headers:', Object.keys(normalizedData[0]));
+            console.log('Sample:', normalizedData[0]);
+        }
+
+        // ============================================================
+        // ROBUST DATE PARSING
+        // Handles: Date objects, DD/M/YYYY strings, M/D/YYYY strings,
+        //          Excel serial numbers (as string or number), ISO strings
+        // ============================================================
+        function parseDate(val) {
+            if (val === null || val === undefined) return null;
+            if (val instanceof Date && !isNaN(val.getTime())) return val;
+
+            const str = String(val).trim();
+            if (!str || str === '') return null;
+
+            // Excel serial number — e.g. "46055.0", 46055, "46055"
+            const numVal = parseFloat(str);
+            if (!isNaN(numVal) && numVal > 30000 && numVal < 60000 && !/[\/\-]/.test(str)) {
+                const excelEpoch = new Date(1899, 11, 30);
+                const d = new Date(excelEpoch.getTime() + numVal * 86400000);
+                if (!isNaN(d.getTime())) return d;
+            }
+
+            // DD/M/YYYY or D/M/YYYY or M/D/YYYY
+            const slashMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            if (slashMatch) {
+                const a = parseInt(slashMatch[1]);
+                const b = parseInt(slashMatch[2]);
+                const year = parseInt(slashMatch[3]);
+                if (a > 12) return new Date(year, b - 1, a); // DD/MM/YYYY
+                if (b > 12) return new Date(year, a - 1, b); // MM/DD/YYYY
+                return new Date(year, b - 1, a); // Ambiguous — assume DD/MM/YYYY
+            }
+
+            // YYYY-MM-DD or ISO
+            const isoMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+            if (isoMatch) {
+                return new Date(parseInt(isoMatch[1]), parseInt(isoMatch[2]) - 1, parseInt(isoMatch[3]));
+            }
+
+            // Fallback: native Date parsing
+            const fallback = new Date(str);
+            if (!isNaN(fallback.getTime())) return fallback;
+
+            return null;
+        }
+
+        function formatDate(date) {
+            if (!date) return 'N/A';
+            if (!(date instanceof Date)) date = parseDate(date);
+            if (!date || isNaN(date.getTime())) return 'N/A';
+            return date.toISOString().split('T')[0];
+        }
+
+        // ============================================================
+        // FILE UPLOAD — reads as raw 2D array (header: 1)
+        // ============================================================
+        function handleFileUpload(e, fileNum) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+                // Read as raw 2D array
+                const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: null, header: 1 });
+
+                // Find header row (contains "Customer No" or "Customer Code")
+                let headerRowIndex = 0;
+                for (let i = 0; i < Math.min(10, jsonData.length); i++) {
+                    const rowStr = JSON.stringify(jsonData[i]);
+                    if (rowStr.includes('Customer No') || rowStr.includes('Customer Code')) {
+                        headerRowIndex = i;
+                        break;
+                    }
+                }
+
+                // Convert to array of objects using the detected header
+                const headerRow = jsonData[headerRowIndex];
+                const dataRows = jsonData.slice(headerRowIndex + 1);
+                const normalizedData = dataRows.map(row => {
+                    const obj = {};
+                    headerRow.forEach((col, idx) => {
+                        if (col) {
+                            obj[col] = row[idx];
+                        } else {
+                            obj[`_col${idx}`] = row[idx];
+                        }
+                    });
+                    return obj;
+                });
+
+                if (fileNum === 1) {
+                    file1Data = normalizedData;
+                    document.getElementById('upload1').classList.add('has-file');
+                    document.getElementById('file1-name').textContent = file.name;
+                } else {
+                    file2Data = normalizedData;
+                    document.getElementById('upload2').classList.add('has-file');
+                    document.getElementById('file2-name').textContent = file.name;
+                }
+
+                reconcileBtn.disabled = !(file1Data && file2Data);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // ============================================================
+        // COLUMN FINDERS — search by key name in the normalized objects
+        // ============================================================
+        function findColumn(data, ...matchers) {
+            if (!data || data.length === 0) return null;
+            const keys = Object.keys(data[0]);
+            for (const matcher of matchers) {
+                for (const key of keys) {
+                    if (matcher(key.toLowerCase())) return key;
+                }
+            }
+            return null;
+        }
+
+        function findCustomerColumn(data) {
+            return findColumn(data,
+                k => k.includes('customer') && (k.includes('no') || k.includes('code') || k.includes('#'))
+            );
+        }
+
+        function findOwedColumn(data) {
+            return findColumn(data, k => k === 'owed', k => k.includes('owed'));
+        }
+
+        // Find the "Customer" column (exact match) — this is the customer AMOUNT in File 2
+        function findCustomerAmountColumn(data) {
+            if (!data || data.length === 0) return null;
+            for (const key of Object.keys(data[0])) {
+                if (key === 'Customer') return key;
+            }
+            return null;
+        }
+
+        function findMethodColumn(data) {
+            return findColumn(data, k => k === 'method', k => k.includes('method'));
+        }
+
+        function findDateColumn(data) {
+            return findColumn(data,
+                k => k === 'service date' || k === 'transaction date',
+                k => k.includes('date') && (k.includes('service') || k.includes('transaction'))
+            );
+        }
+
+        function findChargesColumn(data) {
+            return findColumn(data, k => k === 'charges', k => k.includes('charges'));
+        }
+
+        function findFeesColumn(data) {
+            return findColumn(data, k => k === 'fees');
+        }
+
+        function findServicesColumn(data) {
+            return findColumn(data, k => k === 'services', k => k.includes('services'));
+        }
+
+        // ============================================================
+        // PAYOUT / SERVICE HELPERS
+        // ============================================================
+        function calculateExpectedPayout(servicesList) {
+            if (!servicesList || servicesList.length === 0) return 0;
+            let total = 0;
+            for (const service of servicesList) {
+                total += PAYOUT_RATES[service.type] || 0;
+            }
+            return total;
+        }
+
+        function formatServices(servicesList) {
+            if (!servicesList || servicesList.length === 0) return '-';
+            return servicesList.map(s => s.type).join(', ');
+        }
+
+        // ============================================================
+        // FILE 2: Get date range using robust parseDate
+        // ============================================================
+        function getDateRange(data, dateCol) {
+            if (!dateCol) return { min: null, max: null };
+            const dates = [];
+            for (const row of data) {
+                const d = parseDate(row[dateCol]);
+                if (d) dates.push(d);
+            }
+            if (dates.length === 0) return { min: null, max: null };
+            dates.sort((a, b) => a.getTime() - b.getTime());
+            return { min: dates[0], max: dates[dates.length - 1] };
+        }
+
+        // ============================================================
+        // FILE 1: Extract transactions (flat table — one row per customer)
+        // Uses robust parseDate for date column
+        // ============================================================
+        function extractFile1Transactions(data, customerCol, owedCol, dateCol, servicesCol) {
+            const totals = {};
+            const dates = {};
+            const services = {};
+
+            for (const row of data) {
+                const custRaw = row[customerCol];
+                if (custRaw === null || custRaw === undefined || custRaw === '' || isNaN(Number(custRaw)) || Number(custRaw) <= 0) continue;
+
+                const cust = Math.floor(Number(custRaw));
+                totals[cust] = parseFloat(row[owedCol]) || 0;
+                dates[cust] = parseDate(row[dateCol]);
+                if (servicesCol) services[cust] = row[servicesCol] || '';
+            }
+
+            return { totals, dates, services };
+        }
+
+        // FILE 1: Unfiltered count for "excluded by date" calculation
+        function countFile1Total(data, customerCol) {
+            const seen = new Set();
+            for (const row of data) {
+                const custRaw = row[customerCol];
+                if (custRaw !== null && custRaw !== undefined && custRaw !== '' && !isNaN(Number(custRaw)) && Number(custRaw) > 0) {
+                    seen.add(Math.floor(Number(custRaw)));
+                }
+            }
+            return seen.size;
+        }
+
+        // ============================================================
+        // FILE 2: Extract totals using Method="Total" rows
+        // Uses "Customer" column for the amount (not "Owed" which has fees)
+        // Propagates date forward through rows
+        // ============================================================
+        function extractFile2Totals(data, customerCol, owedCol, methodCol, dateCol, chargesCol, feesCol) {
+            const totals = {};
+            const dates = {};
+            const services = {};
+            let currentCustomer = null;
+            let lastKnownDate = null;
+            let currentServices = [];
+
+            // Detect the "Customer" amount column (exact header "Customer")
+            const customerAmtCol = findCustomerAmountColumn(data);
+            // Use "Customer" column for amount if available, otherwise fall back to "Owed"
+            const amountCol = customerAmtCol || owedCol;
+
+            console.log('File 2 amount column:', customerAmtCol ? `"Customer" (${customerAmtCol})` : `"Owed" fallback (${owedCol})`);
+
+            for (const row of data) {
+                const rowDate = dateCol ? row[dateCol] : null;
+                const charge = chargesCol ? row[chargesCol] : null;
+
+                // Update propagated date using robust parser
+                if (rowDate !== null && rowDate !== undefined && rowDate !== '') {
+                    const parsed = parseDate(rowDate);
+                    if (parsed) lastKnownDate = parsed;
+                }
+
+                // Detect customer number (guard against empty strings — Number("") === 0 in JS)
+                const custRaw = row[customerCol];
+                if (custRaw !== null && custRaw !== undefined && custRaw !== '' && !isNaN(Number(custRaw)) && Number(custRaw) > 0) {
+                    currentCustomer = Math.floor(Number(custRaw));
+                    currentServices = [];
+                }
+
+                // Collect service types from Charges column
+                if (charge && typeof charge === 'string' && charge !== 'Fees' && charge !== 'Total Fees' && PAYOUT_RATES[charge] !== undefined) {
+                    const feeAmount = feesCol ? Math.abs(row[feesCol] || 0) : Math.abs(row[owedCol] || 0);
+                    currentServices.push({ type: charge, amount: feeAmount });
+                }
+
+                // Capture total row
+                const method = row[methodCol];
+                if (String(method).trim() === 'Total' && currentCustomer !== null) {
+                    totals[currentCustomer] = parseFloat(row[amountCol]) || 0;
+                    dates[currentCustomer] = lastKnownDate;
+                    services[currentCustomer] = [...currentServices];
+                    currentCustomer = null;
+                    currentServices = [];
+                }
+            }
+
+            return { totals, dates, services };
+        }
+
+        // ============================================================
+        // MAIN RECONCILIATION
+        // ============================================================
+        function runReconciliation() {
+            loadingDiv.classList.add('show');
+            resultsDiv.classList.remove('show');
+            downloadBtn.style.display = 'none';
+
+            setTimeout(() => {
+                try {
+                    // Find columns in both files
+                    const customerCol1 = findCustomerColumn(file1Data);
+                    const owedCol1 = findOwedColumn(file1Data);
+                    const dateCol1 = findDateColumn(file1Data);
+                    const servicesCol1 = findServicesColumn(file1Data);
+                    const customerCol2 = findCustomerColumn(file2Data);
+                    const owedCol2 = findOwedColumn(file2Data);
+                    const methodCol2 = findMethodColumn(file2Data);
+                    const dateCol2 = findDateColumn(file2Data);
+                    const chargesCol2 = findChargesColumn(file2Data);
+                    const feesCol2 = findFeesColumn(file2Data);
+
+                    console.log('File 1 cols:', { customerCol1, owedCol1, dateCol1, servicesCol1 });
+                    console.log('File 2 cols:', { customerCol2, owedCol2, methodCol2, dateCol2, chargesCol2, feesCol2 });
+
+                    // Get date range from File 2 (using robust parseDate)
+                    const dateRange = getDateRange(file2Data, dateCol2);
+                    console.log('Date range:', dateRange);
+
+                    const hasDateRange = dateRange.min && dateRange.max;
+
+                    // Extract all File 1 transactions
+                    const f1All = extractFile1Transactions(file1Data, customerCol1, owedCol1, dateCol1, servicesCol1);
+                    const totalBeforeFilter = Object.keys(f1All.totals).length;
+
+                    // Filter File 1 by date range
+                    const file1Totals = {};
+                    const file1Dates = {};
+                    const file1Services = {};
+                    let excludedByDate = 0;
+
+                    for (const [custStr, owed] of Object.entries(f1All.totals)) {
+                        const cust = parseInt(custStr);
+                        const d = f1All.dates[cust];
+
+                        if (hasDateRange && d) {
+                            const dTime = d.getTime();
+                            const minTime = dateRange.min.getTime();
+                            const maxTime = dateRange.max.getTime() + 86400000; // Include full last day
+                            if (dTime < minTime || dTime > maxTime) {
+                                excludedByDate++;
+                                continue;
+                            }
+                        }
+
+                        file1Totals[cust] = owed;
+                        file1Dates[cust] = d;
+                        file1Services[cust] = f1All.services[cust] || '';
+                    }
+
+                    // Extract File 2 totals (uses "Customer" amount column, robust date propagation)
+                    const f2Result = extractFile2Totals(file2Data, customerCol2, owedCol2, methodCol2, dateCol2, chargesCol2, feesCol2);
+                    const file2Totals = f2Result.totals;
+                    const file2Dates = f2Result.dates;
+                    const file2Services = f2Result.services;
+
+                    console.log('File 1 customers (filtered):', Object.keys(file1Totals).length);
+                    console.log('File 2 customers:', Object.keys(file2Totals).length);
+
+                    // Get all unique customer codes
+                    const allCustomers = new Set([
+                        ...Object.keys(file1Totals).map(Number),
+                        ...Object.keys(file2Totals).map(Number)
+                    ]);
+
+                    // Compare
+                    const results = [];
+                    let matches = 0, mismatches = 0, notFoundInF2 = 0, notFoundInF1 = 0;
+                    let payoutDiscrepancies = 0;
+                    const serviceSummary = {};
+
+                    for (const customer of allCustomers) {
+                        const owed1 = file1Totals[customer];
+                        const owed2 = file2Totals[customer];
+                        const serviceDate = file1Dates[customer] || file2Dates[customer];
+                        const servicesList = file2Services[customer] || [];
+                        const expectedPayout = calculateExpectedPayout(servicesList);
+
+                        // File 1 "Services" column (e.g. "Calibration")
+                        const f1Svc = file1Services[customer] || '';
+                        // Use File 2 service list if available, otherwise File 1 service name
+                        const servicesDisplay = servicesList.length > 0 ? formatServices(servicesList) : (f1Svc || '-');
+
+                        // Track service summary from File 2
+                        for (const svc of servicesList) {
+                            if (!serviceSummary[svc.type]) {
+                                serviceSummary[svc.type] = { count: 0, total: 0 };
+                            }
+                            serviceSummary[svc.type].count++;
+                            serviceSummary[svc.type].total += PAYOUT_RATES[svc.type] || 0;
+                        }
+
+                        let status, difference = null;
+                        let payoutStatus = '';
+
+                        if (owed1 === undefined) {
+                            status = 'NOT FOUND in File 1';
+                            notFoundInF1++;
+                        } else if (owed2 === undefined) {
+                            status = 'NOT FOUND in File 2';
+                            notFoundInF2++;
+                        } else {
+                            const absOwed1 = Math.abs(owed1);
+                            const absOwed2 = Math.abs(owed2);
+                            difference = absOwed1 - absOwed2;
+
+                            if (Math.abs(difference) < 0.01) {
+                                status = 'MATCH';
+                                matches++;
+                                difference = 0;
+                            } else {
+                                status = 'MISMATCH';
+                                mismatches++;
+                            }
+
+                            if (expectedPayout > 0 && Math.abs(absOwed2 - expectedPayout) > 0.01) {
+                                payoutStatus = `Expected: $${expectedPayout}`;
+                                payoutDiscrepancies++;
+                            }
+                        }
+
+                        results.push({
+                            serviceDate: serviceDate,
+                            customerCode: customer,
+                            services: servicesList,
+                            servicesDisplay: servicesDisplay,
+                            expectedPayout: expectedPayout,
+                            owedFile1: owed1,
+                            owedFile2: owed2,
+                            difference: difference,
+                            status: status,
+                            payoutStatus: payoutStatus
+                        });
+                    }
+
+                    // Sort: mismatches first, then not found, then matches
+                    results.sort((a, b) => {
+                        const order = { 'MISMATCH': 0, 'NOT FOUND in File 2': 1, 'NOT FOUND in File 1': 2, 'MATCH': 3 };
+                        return (order[a.status] || 9) - (order[b.status] || 9);
+                    });
+
+                    reconciliationResults = {
+                        dateRange: dateRange,
+                        totalAnalyzed: Object.keys(file1Totals).length,
+                        totalBeforeFilter: totalBeforeFilter,
+                        excludedByDate: excludedByDate,
+                        matches: matches,
+                        mismatches: mismatches,
+                        notFoundInF2: notFoundInF2,
+                        notFoundInF1: notFoundInF1,
+                        payoutDiscrepancies: payoutDiscrepancies,
+                        serviceSummary: serviceSummary,
+                        details: results
+                    };
+
+                    displayResults();
+
+                } catch (error) {
+                    alert('Error processing files: ' + error.message);
+                    console.error(error);
+                }
+
+                loadingDiv.classList.remove('show');
+            }, 500);
+        }
+
+        // ============================================================
+        // SORTING
+        // ============================================================
+        let currentSort = { column: null, direction: 'asc' };
+
+        function sortTable(column) {
+            if (currentSort.column === column) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.column = column;
+                currentSort.direction = 'asc';
+            }
+
+            reconciliationResults.details.sort((a, b) => {
+                let valA = a[column];
+                let valB = b[column];
+
+                if (column === 'serviceDate') {
+                    valA = valA ? (valA instanceof Date ? valA.getTime() : (parseDate(valA) || new Date(0)).getTime()) : 0;
+                    valB = valB ? (valB instanceof Date ? valB.getTime() : (parseDate(valB) || new Date(0)).getTime()) : 0;
+                }
+
+                if (valA === undefined || valA === null) valA = column === 'status' ? '' : -Infinity;
+                if (valB === undefined || valB === null) valB = column === 'status' ? '' : -Infinity;
+
+                let result = 0;
+                if (typeof valA === 'string' && typeof valB === 'string') {
+                    result = valA.localeCompare(valB);
+                } else {
+                    result = valA < valB ? -1 : valA > valB ? 1 : 0;
+                }
+
+                return currentSort.direction === 'asc' ? result : -result;
+            });
+
+            document.querySelectorAll('th').forEach(th => {
+                th.classList.remove('sorted');
+                const icon = th.querySelector('.sort-icon');
+                if (icon) icon.textContent = '↕';
+            });
+
+            const activeHeader = document.querySelector(`th[data-sort="${column}"]`);
+            if (activeHeader) {
+                activeHeader.classList.add('sorted');
+                const icon = activeHeader.querySelector('.sort-icon');
+                if (icon) icon.textContent = currentSort.direction === 'asc' ? '↑' : '↓';
+            }
+
+            renderTable();
+        }
+
+        // ============================================================
+        // RENDER TABLE
+        // ============================================================
+        function renderTable() {
+            const r = reconciliationResults;
+            const tbody = document.getElementById('resultsTable');
+            tbody.innerHTML = '';
+
+            for (const row of r.details) {
+                const tr = document.createElement('tr');
+
+                const statusClass = row.status === 'MATCH' ? 'status-match' : 
+                                   row.status === 'MISMATCH' ? 'status-mismatch' : 'status-notfound';
+
+                const dateDisplay = formatDate(row.serviceDate);
+
+                tr.innerHTML = `
+                    <td>${dateDisplay}</td>
+                    <td>${row.customerCode}</td>
+                    <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
+                    <td>${row.owedFile1 !== undefined ? row.owedFile1.toFixed(2) : '-'}</td>
+                    <td>${row.owedFile2 !== undefined ? row.owedFile2.toFixed(2) : '-'}</td>
+                    <td>${row.difference !== null ? row.difference.toFixed(2) : '-'}</td>
+                    <td><span class="status-badge ${statusClass}">${row.status}</span></td>
+                `;
+
+                tbody.appendChild(tr);
+            }
+        }
+
+        // ============================================================
+        // DISPLAY RESULTS
+        // ============================================================
+        function displayResults() {
+            const r = reconciliationResults;
+
+            let dateRangeHtml = '';
+            if (r.dateRange.min && r.dateRange.max) {
+                dateRangeHtml = `Date Range: <span>${formatDate(r.dateRange.min)}</span> to <span>${formatDate(r.dateRange.max)}</span>`;
+                if (r.excludedByDate > 0) {
+                    dateRangeHtml += ` &nbsp;|&nbsp; <span style="color: var(--warning);">${r.excludedByDate} excluded</span> (outside date range)`;
+                }
+            } else {
+                dateRangeHtml = '<span style="color: var(--warning);">⚠️ No date range detected in File 2</span> — all records compared';
+            }
+            document.getElementById('dateRange').innerHTML = dateRangeHtml;
+
+            document.getElementById('totalAnalyzed').textContent = r.totalAnalyzed;
+            document.getElementById('totalMatches').textContent = r.matches;
+            document.getElementById('totalMismatches').textContent = r.mismatches;
+            document.getElementById('totalNotFound').textContent = r.notFoundInF2 + r.notFoundInF1;
+
+            // Display service summary
+            const serviceSummaryDiv = document.getElementById('serviceSummary');
+            const serviceGrid = document.getElementById('serviceGrid');
+            serviceGrid.innerHTML = '';
+
+            const serviceEntries = Object.entries(r.serviceSummary);
+            if (serviceEntries.length > 0) {
+                serviceSummaryDiv.style.display = 'block';
+                
+                let totalPayout = 0;
+                for (const [serviceName, data] of serviceEntries) {
+                    totalPayout += data.total;
+                    const item = document.createElement('div');
+                    item.className = 'service-item';
+                    item.innerHTML = `
+                        <span class="service-name">${serviceName}</span>
+                        <span class="service-stats">
+                            <span class="service-count">${data.count}x</span>
+                            <span class="service-total">$${data.total.toFixed(2)}</span>
+                        </span>
+                    `;
+                    serviceGrid.appendChild(item);
+                }
+
+                const totalItem = document.createElement('div');
+                totalItem.className = 'service-item';
+                totalItem.style.background = 'var(--accent)';
+                totalItem.style.color = 'white';
+                totalItem.innerHTML = `
+                    <span class="service-name" style="color: white; font-weight: 600;">TOTAL EXPECTED PAYOUT</span>
+                    <span class="service-stats">
+                        <span class="service-total" style="color: white; font-size: 1rem; font-weight: 700;">$${totalPayout.toFixed(2)}</span>
+                    </span>
+                `;
+                serviceGrid.appendChild(totalItem);
+            } else {
+                serviceSummaryDiv.style.display = 'none';
+            }
+
+            currentSort = { column: null, direction: 'asc' };
+            document.querySelectorAll('th').forEach(th => {
+                th.classList.remove('sorted');
+                const icon = th.querySelector('.sort-icon');
+                if (icon) icon.textContent = '↕';
+            });
+
+            renderTable();
+
+            resultsDiv.classList.add('show');
+            downloadBtn.style.display = 'inline-flex';
+        }
+
+        // ============================================================
+        // DOWNLOAD REPORT
+        // ============================================================
+        function downloadReport() {
+            const r = reconciliationResults;
+
+            const wb = XLSX.utils.book_new();
+
+            let totalExpectedPayout = 0;
+            for (const [serviceName, data] of Object.entries(r.serviceSummary)) {
+                totalExpectedPayout += data.total;
+            }
+
+            const summaryData = [
+                ['RECONCILIATION SUMMARY'],
+                [''],
+                ['Date Range:', `${formatDate(r.dateRange.min)} to ${formatDate(r.dateRange.max)}`],
+                ['Rows Analyzed (File 1):', r.totalAnalyzed],
+                ['Excluded by Date Range:', r.excludedByDate],
+                ['Matches:', r.matches],
+                ['Mismatches:', r.mismatches],
+                ['Not Found in File 2:', r.notFoundInF2],
+                ['Not Found in File 1:', r.notFoundInF1],
+                [''],
+                ['SERVICE BREAKDOWN'],
+                ['']
+            ];
+
+            for (const [serviceName, data] of Object.entries(r.serviceSummary)) {
+                summaryData.push([serviceName, `${data.count}x`, `$${data.total.toFixed(2)}`]);
+            }
+            summaryData.push(['TOTAL EXPECTED PAYOUT', '', `$${totalExpectedPayout.toFixed(2)}`]);
+            summaryData.push(['']);
+            summaryData.push(['TRANSACTION DETAILS']);
+            summaryData.push(['Service Date', 'Customer Code', 'Services', 'Owed (File 1)', 'Owed (File 2)', 'Difference', 'Status']);
+
+            for (const row of r.details) {
+                summaryData.push([
+                    formatDate(row.serviceDate),
+                    row.customerCode,
+                    row.servicesDisplay,
+                    row.owedFile1 !== undefined ? row.owedFile1 : '',
+                    row.owedFile2 !== undefined ? row.owedFile2 : '',
+                    row.difference !== null ? row.difference : '',
+                    row.status
+                ]);
+            }
+
+            const ws = XLSX.utils.aoa_to_sheet(summaryData);
+            ws['!cols'] = [
+                { wch: 14 }, { wch: 15 }, { wch: 35 },
+                { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 22 }
+            ];
+
+            XLSX.utils.book_append_sheet(wb, ws, 'Reconciliation');
+
+            const today = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(wb, `Reconciliation_Report_${today}.xlsx`);
+        }
+    </script>
+</body>
+</html>
