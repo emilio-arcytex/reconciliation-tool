@@ -217,6 +217,98 @@
             margin-bottom: 32px;
         }
 
+        /* Overview bar */
+        .overview-bar {
+            display: flex;
+            gap: 24px;
+            padding: 16px 24px;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+
+        .overview-item {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+        }
+
+        .overview-num {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .overview-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* Recon sections */
+        .recon-section {
+            margin-bottom: 40px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .section-title-row {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .section-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin: 4px 0 0 0;
+        }
+
+        .section-stats {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .stat-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .stat-pill.match {
+            background: var(--success-bg);
+            color: var(--success);
+        }
+
+        .stat-pill.mismatch {
+            background: var(--error-bg);
+            color: var(--error);
+        }
+
+        .stat-pill span {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+        }
+
         .summary-card {
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
@@ -288,7 +380,7 @@
         }
 
         th, td {
-            padding: 12px 14px;
+            padding: 12px 16px;
             text-align: left;
             border-bottom: 1px solid var(--border-color);
         }
@@ -296,7 +388,7 @@
         th {
             background: var(--bg-tertiary);
             font-weight: 600;
-            font-size: 0.75rem;
+            font-size: 0.8rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             color: var(--text-secondary);
@@ -325,18 +417,28 @@
 
         td {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 0.82rem;
+            font-size: 0.85rem;
         }
 
         tr:hover {
             background: var(--bg-tertiary);
         }
 
+        .diff-positive {
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .diff-negative {
+            color: var(--error);
+            font-weight: 600;
+        }
+
         .status-badge {
             display: inline-block;
-            padding: 3px 10px;
+            padding: 4px 12px;
             border-radius: 20px;
-            font-size: 0.7rem;
+            font-size: 0.75rem;
             font-weight: 600;
             font-family: 'DM Sans', sans-serif;
             white-space: nowrap;
@@ -558,61 +660,96 @@
         <div class="results" id="results">
             <div class="date-range" id="dateRange"></div>
 
-            <div class="summary-grid">
-                <div class="summary-card">
-                    <div class="summary-value" id="totalAnalyzed">0</div>
-                    <div class="summary-label">Rows Analyzed</div>
+            <!-- OVERVIEW CARDS -->
+            <div class="overview-bar">
+                <div class="overview-item">
+                    <span class="overview-num" id="totalAnalyzed">0</span>
+                    <span class="overview-label">Visits Analyzed</span>
                 </div>
-                <div class="summary-card match">
-                    <div class="summary-value" id="totalMatches">0</div>
-                    <div class="summary-label">Payment Matches</div>
+                <div class="overview-item">
+                    <span class="overview-num" id="totalExcluded">0</span>
+                    <span class="overview-label">Excluded by Date</span>
                 </div>
-                <div class="summary-card mismatch">
-                    <div class="summary-value" id="totalMismatches">0</div>
-                    <div class="summary-label">Payment Mismatches</div>
+                <div class="overview-item">
+                    <span class="overview-num" id="totalNotFoundF1">0</span>
+                    <span class="overview-label">Not in Record</span>
                 </div>
-                <div class="summary-card match">
-                    <div class="summary-value" id="totalPayoutMatches">0</div>
-                    <div class="summary-label">Payout Matches</div>
-                </div>
-                <div class="summary-card mismatch">
-                    <div class="summary-value" id="totalPayoutMismatches">0</div>
-                    <div class="summary-label">Payout Mismatches</div>
-                </div>
-                <div class="summary-card warning">
-                    <div class="summary-value" id="totalNotFound">0</div>
-                    <div class="summary-label">Not Found</div>
+                <div class="overview-item">
+                    <span class="overview-num" id="totalNotFoundF2">0</span>
+                    <span class="overview-label">Not in SSC</span>
                 </div>
             </div>
 
-            <div class="service-summary" id="serviceSummary" style="display: none;">
-                <h3 style="margin-bottom: 16px; font-size: 1.1rem;">Service Breakdown</h3>
-                <div class="service-grid" id="serviceGrid"></div>
+            <!-- ======================== -->
+            <!-- SECTION 1: PAYMENTS      -->
+            <!-- ======================== -->
+            <div class="recon-section">
+                <div class="section-header">
+                    <div class="section-title-row">
+                        <h2 class="section-title">💰 Payment Reconciliation</h2>
+                        <p class="section-subtitle">Customer payments: Your Transactions Record vs SSC Payroll</p>
+                    </div>
+                    <div class="section-stats">
+                        <div class="stat-pill match"><span id="payMatches">0</span> Matches</div>
+                        <div class="stat-pill mismatch"><span id="payMismatches">0</span> Mismatches</div>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <div class="table-scroll">
+                        <table id="paymentTable">
+                            <thead>
+                                <tr>
+                                    <th data-sort="serviceDate" data-table="payment" onclick="sortTable('serviceDate','payment')">Date <span class="sort-icon">↕</span></th>
+                                    <th data-sort="customerCode" data-table="payment" onclick="sortTable('customerCode','payment')">Customer <span class="sort-icon">↕</span></th>
+                                    <th data-sort="servicesDisplay" data-table="payment" onclick="sortTable('servicesDisplay','payment')">Services <span class="sort-icon">↕</span></th>
+                                    <th data-sort="owedFile1" data-table="payment" onclick="sortTable('owedFile1','payment')">Paid (Record) <span class="sort-icon">↕</span></th>
+                                    <th data-sort="owedFile2" data-table="payment" onclick="sortTable('owedFile2','payment')">Paid (SSC) <span class="sort-icon">↕</span></th>
+                                    <th data-sort="paymentDiff" data-table="payment" onclick="sortTable('paymentDiff','payment')">Difference <span class="sort-icon">↕</span></th>
+                                    <th data-sort="paymentStatus" data-table="payment" onclick="sortTable('paymentStatus','payment')">Status <span class="sort-icon">↕</span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="paymentTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
-            <div class="table-container">
-                <div class="table-header">
-                    <h2>Reconciliation Details</h2>
+            <!-- ======================== -->
+            <!-- SECTION 2: PAYOUTS       -->
+            <!-- ======================== -->
+            <div class="recon-section">
+                <div class="section-header">
+                    <div class="section-title-row">
+                        <h2 class="section-title">📋 Payout Reconciliation</h2>
+                        <p class="section-subtitle">What SSC owes us vs expected payout based on services performed</p>
+                    </div>
+                    <div class="section-stats">
+                        <div class="stat-pill match"><span id="payoutMatchesCount">0</span> Matches</div>
+                        <div class="stat-pill mismatch"><span id="payoutMismatchesCount">0</span> Mismatches</div>
+                    </div>
                 </div>
-                <div class="table-scroll">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th data-sort="serviceDate" onclick="sortTable('serviceDate')">Date <span class="sort-icon">↕</span></th>
-                                <th data-sort="customerCode" onclick="sortTable('customerCode')">Customer <span class="sort-icon">↕</span></th>
-                                <th data-sort="servicesDisplay" onclick="sortTable('servicesDisplay')">Services <span class="sort-icon">↕</span></th>
-                                <th data-sort="owedFile1" onclick="sortTable('owedFile1')">Paid (Record) <span class="sort-icon">↕</span></th>
-                                <th data-sort="owedFile2" onclick="sortTable('owedFile2')">Paid (SSC) <span class="sort-icon">↕</span></th>
-                                <th data-sort="paymentDiff" onclick="sortTable('paymentDiff')">Pay Diff <span class="sort-icon">↕</span></th>
-                                <th data-sort="paymentStatus" onclick="sortTable('paymentStatus')">Payment <span class="sort-icon">↕</span></th>
-                                <th data-sort="sscPayout" onclick="sortTable('sscPayout')">SSC Payout <span class="sort-icon">↕</span></th>
-                                <th data-sort="expectedPayout" onclick="sortTable('expectedPayout')">Expected <span class="sort-icon">↕</span></th>
-                                <th data-sort="payoutDiff" onclick="sortTable('payoutDiff')">Payout Diff <span class="sort-icon">↕</span></th>
-                                <th data-sort="payoutStatus" onclick="sortTable('payoutStatus')">Payout <span class="sort-icon">↕</span></th>
-                            </tr>
-                        </thead>
-                        <tbody id="resultsTable"></tbody>
-                    </table>
+
+                <div class="service-summary" id="serviceSummary" style="display: none;">
+                    <div class="service-grid" id="serviceGrid"></div>
+                </div>
+
+                <div class="table-container">
+                    <div class="table-scroll">
+                        <table id="payoutTable">
+                            <thead>
+                                <tr>
+                                    <th data-sort="serviceDate" data-table="payout" onclick="sortTable('serviceDate','payout')">Date <span class="sort-icon">↕</span></th>
+                                    <th data-sort="customerCode" data-table="payout" onclick="sortTable('customerCode','payout')">Customer <span class="sort-icon">↕</span></th>
+                                    <th data-sort="servicesDisplay" data-table="payout" onclick="sortTable('servicesDisplay','payout')">Services <span class="sort-icon">↕</span></th>
+                                    <th data-sort="sscPayout" data-table="payout" onclick="sortTable('sscPayout','payout')">SSC Owes Us <span class="sort-icon">↕</span></th>
+                                    <th data-sort="expectedPayout" data-table="payout" onclick="sortTable('expectedPayout','payout')">Expected <span class="sort-icon">↕</span></th>
+                                    <th data-sort="payoutDiff" data-table="payout" onclick="sortTable('payoutDiff','payout')">Difference <span class="sort-icon">↕</span></th>
+                                    <th data-sort="payoutStatus" data-table="payout" onclick="sortTable('payoutStatus','payout')">Status <span class="sort-icon">↕</span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="payoutTableBody"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1574,19 +1711,27 @@
         }
 
         // ============================================================
-        // SORTING
+        // SORTING (per-table)
         // ============================================================
-        let currentSort = { column: null, direction: 'asc' };
+        let sortState = {
+            payment: { column: null, direction: 'asc' },
+            payout: { column: null, direction: 'asc' }
+        };
 
-        function sortTable(column) {
-            if (currentSort.column === column) {
-                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+        function sortTable(column, tableId) {
+            const state = sortState[tableId];
+            if (state.column === column) {
+                state.direction = state.direction === 'asc' ? 'desc' : 'asc';
             } else {
-                currentSort.column = column;
-                currentSort.direction = 'asc';
+                state.column = column;
+                state.direction = 'asc';
             }
 
-            reconciliationResults.details.sort((a, b) => {
+            const list = tableId === 'payment'
+                ? reconciliationResults._paymentRows
+                : reconciliationResults._payoutRows;
+
+            list.sort((a, b) => {
                 let valA = a[column];
                 let valB = b[column];
 
@@ -1595,8 +1740,8 @@
                     valB = valB ? (valB instanceof Date ? valB.getTime() : (parseDate(valB) || new Date(0)).getTime()) : 0;
                 }
 
-                if (valA === undefined || valA === null) valA = column === 'status' ? '' : -Infinity;
-                if (valB === undefined || valB === null) valB = column === 'status' ? '' : -Infinity;
+                if (valA === undefined || valA === null) valA = -Infinity;
+                if (valB === undefined || valB === null) valB = -Infinity;
 
                 let result = 0;
                 if (typeof valA === 'string' && typeof valB === 'string') {
@@ -1604,59 +1749,75 @@
                 } else {
                     result = valA < valB ? -1 : valA > valB ? 1 : 0;
                 }
-
-                return currentSort.direction === 'asc' ? result : -result;
+                return state.direction === 'asc' ? result : -result;
             });
 
-            document.querySelectorAll('th').forEach(th => {
+            // Update header icons for this table only
+            const table = document.getElementById(tableId + 'Table');
+            table.querySelectorAll('th').forEach(th => {
                 th.classList.remove('sorted');
                 const icon = th.querySelector('.sort-icon');
                 if (icon) icon.textContent = '↕';
             });
-
-            const activeHeader = document.querySelector(`th[data-sort="${column}"]`);
+            const activeHeader = table.querySelector(`th[data-sort="${column}"]`);
             if (activeHeader) {
                 activeHeader.classList.add('sorted');
                 const icon = activeHeader.querySelector('.sort-icon');
-                if (icon) icon.textContent = currentSort.direction === 'asc' ? '↑' : '↓';
+                if (icon) icon.textContent = state.direction === 'asc' ? '↑' : '↓';
             }
 
-            renderTable();
+            if (tableId === 'payment') renderPaymentTable();
+            else renderPayoutTable();
         }
 
         // ============================================================
-        // RENDER TABLE
+        // RENDER PAYMENT TABLE
         // ============================================================
-        function renderTable() {
-            const r = reconciliationResults;
-            const tbody = document.getElementById('resultsTable');
+        function renderPaymentTable() {
+            const rows = reconciliationResults._paymentRows;
+            const tbody = document.getElementById('paymentTableBody');
             tbody.innerHTML = '';
 
-            for (const row of r.details) {
+            for (const row of rows) {
                 const tr = document.createElement('tr');
-
-                const payStatusClass = row.paymentStatus === 'MATCH' ? 'status-match' : 
-                                       row.paymentStatus === 'MISMATCH' ? 'status-mismatch' : 'status-notfound';
-
-                const payoutStatusClass = row.payoutStatus === 'MATCH' ? 'status-match' :
-                                          row.payoutStatus === 'MISMATCH' ? 'status-mismatch' : 'status-notfound';
-
-                const dateDisplay = formatDate(row.serviceDate);
+                const statusClass = row.paymentStatus === 'MATCH' ? 'status-match' :
+                                    row.paymentStatus === 'MISMATCH' ? 'status-mismatch' : 'status-notfound';
 
                 tr.innerHTML = `
-                    <td>${dateDisplay}</td>
+                    <td>${formatDate(row.serviceDate)}</td>
                     <td>${row.customerCode}</td>
                     <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
-                    <td>${row.owedFile1 !== undefined ? row.owedFile1.toFixed(2) : '-'}</td>
-                    <td>${row.owedFile2 !== undefined ? row.owedFile2.toFixed(2) : '-'}</td>
-                    <td>${row.paymentDiff !== null ? row.paymentDiff.toFixed(2) : '-'}</td>
-                    <td><span class="status-badge ${payStatusClass}">${row.paymentStatus}</span></td>
-                    <td>${row.sscPayout !== undefined ? row.sscPayout.toFixed(2) : '-'}</td>
-                    <td>${row.expectedPayout ? row.expectedPayout.toFixed(2) : '-'}</td>
-                    <td>${row.payoutDiff !== null ? row.payoutDiff.toFixed(2) : '-'}</td>
-                    <td><span class="status-badge ${payoutStatusClass}">${row.payoutStatus}</span></td>
+                    <td>${row.owedFile1 !== undefined ? '$' + row.owedFile1.toFixed(2) : '-'}</td>
+                    <td>${row.owedFile2 !== undefined ? '$' + row.owedFile2.toFixed(2) : '-'}</td>
+                    <td class="${row.paymentDiff > 0 ? 'diff-positive' : row.paymentDiff < 0 ? 'diff-negative' : ''}">${row.paymentDiff !== null ? '$' + row.paymentDiff.toFixed(2) : '-'}</td>
+                    <td><span class="status-badge ${statusClass}">${row.paymentStatus}</span></td>
                 `;
+                tbody.appendChild(tr);
+            }
+        }
 
+        // ============================================================
+        // RENDER PAYOUT TABLE
+        // ============================================================
+        function renderPayoutTable() {
+            const rows = reconciliationResults._payoutRows;
+            const tbody = document.getElementById('payoutTableBody');
+            tbody.innerHTML = '';
+
+            for (const row of rows) {
+                const statusClass = row.payoutStatus === 'MATCH' ? 'status-match' :
+                                    row.payoutStatus === 'MISMATCH' ? 'status-mismatch' : 'status-notfound';
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${formatDate(row.serviceDate)}</td>
+                    <td>${row.customerCode}</td>
+                    <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
+                    <td>${row.sscPayout !== undefined ? '$' + row.sscPayout.toFixed(2) : '-'}</td>
+                    <td>$${(row.expectedPayout || 0).toFixed(2)}</td>
+                    <td class="${row.payoutDiff > 0 ? 'diff-positive' : row.payoutDiff < 0 ? 'diff-negative' : ''}">${row.payoutDiff !== null ? '$' + row.payoutDiff.toFixed(2) : '-'}</td>
+                    <td><span class="status-badge ${statusClass}">${row.payoutStatus}</span></td>
+                `;
                 tbody.appendChild(tr);
             }
         }
@@ -1667,25 +1828,45 @@
         function displayResults() {
             const r = reconciliationResults;
 
+            // Date range
             let dateRangeHtml = '';
             if (r.dateRange.min && r.dateRange.max) {
                 dateRangeHtml = `Date Range: <span>${formatDate(r.dateRange.min)}</span> to <span>${formatDate(r.dateRange.max)}</span>`;
-                if (r.excludedByDate > 0) {
-                    dateRangeHtml += ` &nbsp;|&nbsp; <span style="color: var(--warning);">${r.excludedByDate} excluded</span> (outside date range)`;
-                }
             } else {
                 dateRangeHtml = '<span style="color: var(--warning);">⚠️ No date range detected in File 2</span> — all records compared';
             }
             document.getElementById('dateRange').innerHTML = dateRangeHtml;
 
+            // Overview bar
             document.getElementById('totalAnalyzed').textContent = r.totalAnalyzed;
-            document.getElementById('totalMatches').textContent = r.paymentMatches;
-            document.getElementById('totalMismatches').textContent = r.paymentMismatches;
-            document.getElementById('totalPayoutMatches').textContent = r.payoutMatches;
-            document.getElementById('totalPayoutMismatches').textContent = r.payoutMismatches;
-            document.getElementById('totalNotFound').textContent = r.notFoundInF2 + r.notFoundInF1;
+            document.getElementById('totalExcluded').textContent = r.excludedByDate;
+            document.getElementById('totalNotFoundF1').textContent = r.notFoundInF1;
+            document.getElementById('totalNotFoundF2').textContent = r.notFoundInF2;
 
-            // Display service summary
+            // Payment stats
+            document.getElementById('payMatches').textContent = r.paymentMatches;
+            document.getElementById('payMismatches').textContent = r.paymentMismatches;
+
+            // Payout stats
+            document.getElementById('payoutMatchesCount').textContent = r.payoutMatches;
+            document.getElementById('payoutMismatchesCount').textContent = r.payoutMismatches;
+
+            // Build separate row lists for the two tables
+            // Payment table: all rows sorted by payment status
+            r._paymentRows = [...r.details].sort((a, b) => {
+                const order = { 'MISMATCH': 0, 'NOT FOUND in SSC Payroll': 1, 'NOT FOUND in Transactions Record': 2, 'MATCH': 3 };
+                return (order[a.paymentStatus] ?? 9) - (order[b.paymentStatus] ?? 9);
+            });
+
+            // Payout table: only rows that have payout data, sorted by payout status
+            r._payoutRows = r.details
+                .filter(row => row.sscPayout !== undefined)
+                .sort((a, b) => {
+                    const order = { 'MISMATCH': 0, '-': 1, 'NO SERVICES': 2, 'MATCH': 3 };
+                    return (order[a.payoutStatus] ?? 9) - (order[b.payoutStatus] ?? 9);
+                });
+
+            // Service breakdown
             const serviceSummaryDiv = document.getElementById('serviceSummary');
             const serviceGrid = document.getElementById('serviceGrid');
             serviceGrid.innerHTML = '';
@@ -1693,7 +1874,7 @@
             const serviceEntries = Object.entries(r.serviceSummary);
             if (serviceEntries.length > 0) {
                 serviceSummaryDiv.style.display = 'block';
-                
+
                 let totalPayout = 0;
                 for (const [serviceName, data] of serviceEntries) {
                     totalPayout += data.total;
@@ -1724,46 +1905,66 @@
                 serviceSummaryDiv.style.display = 'none';
             }
 
-            currentSort = { column: null, direction: 'asc' };
-            document.querySelectorAll('th').forEach(th => {
-                th.classList.remove('sorted');
-                const icon = th.querySelector('.sort-icon');
-                if (icon) icon.textContent = '↕';
-            });
+            // Reset sort state
+            sortState = { payment: { column: null, direction: 'asc' }, payout: { column: null, direction: 'asc' } };
 
-            renderTable();
+            renderPaymentTable();
+            renderPayoutTable();
 
             resultsDiv.classList.add('show');
             downloadBtn.style.display = 'inline-flex';
         }
 
         // ============================================================
-        // DOWNLOAD REPORT
+        // DOWNLOAD REPORT (two sheets)
         // ============================================================
         function downloadReport() {
             const r = reconciliationResults;
-
             const wb = XLSX.utils.book_new();
 
             let totalExpectedPayout = 0;
-            for (const [serviceName, data] of Object.entries(r.serviceSummary)) {
+            for (const [_, data] of Object.entries(r.serviceSummary)) {
                 totalExpectedPayout += data.total;
             }
 
-            const summaryData = [
-                ['RECONCILIATION SUMMARY'],
+            // --- Sheet 1: Payment Reconciliation ---
+            const payData = [
+                ['PAYMENT RECONCILIATION'],
                 [''],
                 ['Date Range:', `${formatDate(r.dateRange.min)} to ${formatDate(r.dateRange.max)}`],
-                ['Rows Analyzed (Transactions Record):', r.totalAnalyzed],
+                ['Visits Analyzed:', r.totalAnalyzed],
                 ['Excluded by Date Range:', r.excludedByDate],
-                [''],
-                ['PAYMENT RECONCILIATION'],
                 ['Payment Matches:', r.paymentMatches],
                 ['Payment Mismatches:', r.paymentMismatches],
                 ['Not Found in SSC Payroll:', r.notFoundInF2],
                 ['Not Found in Transactions Record:', r.notFoundInF1],
                 [''],
+                ['Service Date', 'Customer Code', 'Services', 'Paid (Record)', 'Paid (SSC)', 'Difference', 'Status']
+            ];
+
+            for (const row of r._paymentRows) {
+                payData.push([
+                    formatDate(row.serviceDate),
+                    row.customerCode,
+                    row.servicesDisplay,
+                    row.owedFile1 !== undefined ? row.owedFile1 : '',
+                    row.owedFile2 !== undefined ? row.owedFile2 : '',
+                    row.paymentDiff !== null ? row.paymentDiff : '',
+                    row.paymentStatus
+                ]);
+            }
+
+            const ws1 = XLSX.utils.aoa_to_sheet(payData);
+            ws1['!cols'] = [
+                { wch: 12 }, { wch: 14 }, { wch: 35 },
+                { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 28 }
+            ];
+            XLSX.utils.book_append_sheet(wb, ws1, 'Payments');
+
+            // --- Sheet 2: Payout Reconciliation ---
+            const payoutData = [
                 ['PAYOUT RECONCILIATION'],
+                [''],
                 ['Payout Matches:', r.payoutMatches],
                 ['Payout Mismatches:', r.payoutMismatches],
                 [''],
@@ -1772,37 +1973,30 @@
             ];
 
             for (const [serviceName, data] of Object.entries(r.serviceSummary)) {
-                summaryData.push([serviceName, `${data.count}x`, `$${data.total.toFixed(2)}`]);
+                payoutData.push([serviceName, `${data.count}x`, `$${data.total.toFixed(2)}`]);
             }
-            summaryData.push(['TOTAL EXPECTED PAYOUT', '', `$${totalExpectedPayout.toFixed(2)}`]);
-            summaryData.push(['']);
-            summaryData.push(['TRANSACTION DETAILS']);
-            summaryData.push(['Service Date', 'Customer Code', 'Services', 'Paid (Record)', 'Paid (SSC)', 'Pay Diff', 'Payment Status', 'SSC Payout', 'Expected Payout', 'Payout Diff', 'Payout Status']);
+            payoutData.push(['TOTAL EXPECTED PAYOUT', '', `$${totalExpectedPayout.toFixed(2)}`]);
+            payoutData.push(['']);
+            payoutData.push(['Service Date', 'Customer Code', 'Services', 'SSC Owes Us', 'Expected Payout', 'Difference', 'Status']);
 
-            for (const row of r.details) {
-                summaryData.push([
+            for (const row of r._payoutRows) {
+                payoutData.push([
                     formatDate(row.serviceDate),
                     row.customerCode,
                     row.servicesDisplay,
-                    row.owedFile1 !== undefined ? row.owedFile1 : '',
-                    row.owedFile2 !== undefined ? row.owedFile2 : '',
-                    row.paymentDiff !== null ? row.paymentDiff : '',
-                    row.paymentStatus,
                     row.sscPayout !== undefined ? row.sscPayout : '',
-                    row.expectedPayout || '',
+                    row.expectedPayout || 0,
                     row.payoutDiff !== null ? row.payoutDiff : '',
                     row.payoutStatus
                 ]);
             }
 
-            const ws = XLSX.utils.aoa_to_sheet(summaryData);
-            ws['!cols'] = [
-                { wch: 12 }, { wch: 14 }, { wch: 30 },
-                { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 22 },
-                { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }
+            const ws2 = XLSX.utils.aoa_to_sheet(payoutData);
+            ws2['!cols'] = [
+                { wch: 12 }, { wch: 14 }, { wch: 35 },
+                { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 14 }
             ];
-
-            XLSX.utils.book_append_sheet(wb, ws, 'Reconciliation');
+            XLSX.utils.book_append_sheet(wb, ws2, 'Payouts');
 
             const today = new Date().toISOString().split('T')[0];
             XLSX.writeFile(wb, `Reconciliation_Report_${today}.xlsx`);
