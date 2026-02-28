@@ -1140,34 +1140,49 @@
         }
 
         // ============================================================
-        // FILE 1: Extract transactions (flat table — one row per customer)
-        // Uses robust parseDate for date column
+        // FILE 1: Extract transactions — MULTI-VISIT AWARE
+        // Uses customer+date composite key so repeat customers are
+        // kept as separate rows instead of being overwritten.
+        // Multiple rows on the SAME date for the SAME customer are summed.
         // ============================================================
         function extractFile1Transactions(data, customerCol, owedCol, dateCol, servicesCol) {
-            const totals = {};
-            const dates = {};
-            const services = {};
+            const entries = {}; // key = "custNo_YYYY-MM-DD"
 
             for (const row of data) {
                 const custRaw = row[customerCol];
                 if (custRaw === null || custRaw === undefined || custRaw === '' || isNaN(Number(custRaw)) || Number(custRaw) <= 0) continue;
 
                 const cust = Math.floor(Number(custRaw));
-                totals[cust] = parseFloat(row[owedCol]) || 0;
-                dates[cust] = parseDate(row[dateCol]);
-                if (servicesCol) services[cust] = row[servicesCol] || '';
+                const d = parseDate(row[dateCol]);
+                const dateKey = d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : 'nodate';
+                const key = `${cust}_${dateKey}`;
+
+                if (entries[key]) {
+                    // Same customer, same date — sum the amounts
+                    entries[key].owed += parseFloat(row[owedCol]) || 0;
+                } else {
+                    entries[key] = {
+                        customer: cust,
+                        date: d,
+                        owed: parseFloat(row[owedCol]) || 0,
+                        service: servicesCol ? (row[servicesCol] || '') : ''
+                    };
+                }
             }
 
-            return { totals, dates, services };
+            return entries;
         }
 
-        // FILE 1: Unfiltered count for "excluded by date" calculation
-        function countFile1Total(data, customerCol) {
+        // FILE 1: Count total unique visits (customer+date pairs)
+        function countFile1Total(data, customerCol, dateCol) {
             const seen = new Set();
             for (const row of data) {
                 const custRaw = row[customerCol];
                 if (custRaw !== null && custRaw !== undefined && custRaw !== '' && !isNaN(Number(custRaw)) && Number(custRaw) > 0) {
-                    seen.add(Math.floor(Number(custRaw)));
+                    const cust = Math.floor(Number(custRaw));
+                    const d = parseDate(row[dateCol]);
+                    const dateKey = d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : 'nodate';
+                    seen.add(`${cust}_${dateKey}`);
                 }
             }
             return seen.size;
@@ -1179,10 +1194,7 @@
         // Propagates date forward through rows
         // ============================================================
         function extractFile2Totals(data, customerCol, owedCol, methodCol, dateCol, chargesCol, feesCol) {
-            const totals = {};      // Customer payment amounts
-            const payouts = {};     // SSC payout amounts (Owed column)
-            const dates = {};
-            const services = {};
+            const entries = {}; // key = "custNo_YYYY-MM-DD"
             let currentCustomer = null;
             let lastKnownDate = null;
             let currentServices = [];
@@ -1221,16 +1233,24 @@
                 // Capture total row
                 const method = row[methodCol];
                 if (String(method).trim() === 'Total' && currentCustomer !== null) {
-                    totals[currentCustomer] = parseFloat(row[amountCol]) || 0;
-                    payouts[currentCustomer] = Math.abs(parseFloat(row[owedCol]) || 0);
-                    dates[currentCustomer] = lastKnownDate;
-                    services[currentCustomer] = [...currentServices];
+                    const d = lastKnownDate;
+                    const dateKey = d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : 'nodate';
+                    const key = `${currentCustomer}_${dateKey}`;
+
+                    entries[key] = {
+                        customer: currentCustomer,
+                        date: d,
+                        payment: parseFloat(row[amountCol]) || 0,
+                        payout: Math.abs(parseFloat(row[owedCol]) || 0),
+                        services: [...currentServices]
+                    };
+
                     currentCustomer = null;
                     currentServices = [];
                 }
             }
 
-            return { totals, payouts, dates, services };
+            return entries;
         }
 
         // ============================================================
@@ -1264,109 +1284,168 @@
 
                     const hasDateRange = dateRange.min && dateRange.max;
 
-                    // Extract all File 1 transactions
+                    // Extract all File 1 visits (composite key: customer+date)
                     const f1All = extractFile1Transactions(file1Data, customerCol1, owedCol1, dateCol1, servicesCol1);
-                    const totalBeforeFilter = Object.keys(f1All.totals).length;
+                    const totalBeforeFilter = Object.keys(f1All).length;
 
                     // Filter File 1 by date range
-                    const file1Totals = {};
-                    const file1Dates = {};
-                    const file1Services = {};
+                    const f1Filtered = {};
                     let excludedByDate = 0;
 
-                    for (const [custStr, owed] of Object.entries(f1All.totals)) {
-                        const cust = parseInt(custStr);
-                        const d = f1All.dates[cust];
-
+                    for (const [key, entry] of Object.entries(f1All)) {
+                        const d = entry.date;
                         if (hasDateRange && d) {
                             const dTime = d.getTime();
                             const minTime = dateRange.min.getTime();
-                            const maxTime = dateRange.max.getTime() + 86400000; // Include full last day
+                            const maxTime = dateRange.max.getTime() + 86400000;
                             if (dTime < minTime || dTime > maxTime) {
                                 excludedByDate++;
                                 continue;
                             }
                         }
-
-                        file1Totals[cust] = owed;
-                        file1Dates[cust] = d;
-                        file1Services[cust] = f1All.services[cust] || '';
+                        f1Filtered[key] = entry;
                     }
 
-                    // Extract File 2 totals (uses "Customer" amount column, robust date propagation)
-                    const f2Result = extractFile2Totals(file2Data, customerCol2, owedCol2, methodCol2, dateCol2, chargesCol2, feesCol2);
-                    const file2Totals = f2Result.totals;
-                    const file2Payouts = f2Result.payouts;
-                    const file2Dates = f2Result.dates;
-                    const file2Services = f2Result.services;
+                    // Extract File 2 visits (composite key: customer+date)
+                    const f2Entries = extractFile2Totals(file2Data, customerCol2, owedCol2, methodCol2, dateCol2, chargesCol2, feesCol2);
 
-                    console.log('File 1 customers (filtered):', Object.keys(file1Totals).length);
-                    console.log('File 2 customers:', Object.keys(file2Totals).length);
+                    console.log('File 1 visits (filtered):', Object.keys(f1Filtered).length);
+                    console.log('File 2 visits:', Object.keys(f2Entries).length);
 
-                    // Get all unique customer codes
-                    const allCustomers = new Set([
-                        ...Object.keys(file1Totals).map(Number),
-                        ...Object.keys(file2Totals).map(Number)
-                    ]);
+                    // Build lookup: for F2 entries without exact date match in F1,
+                    // try matching by customer number alone (date may differ slightly)
+                    const f1ByCust = {};
+                    for (const [key, entry] of Object.entries(f1Filtered)) {
+                        const c = entry.customer;
+                        if (!f1ByCust[c]) f1ByCust[c] = [];
+                        f1ByCust[c].push({ key, ...entry });
+                    }
+                    const f2ByCust = {};
+                    for (const [key, entry] of Object.entries(f2Entries)) {
+                        const c = entry.customer;
+                        if (!f2ByCust[c]) f2ByCust[c] = [];
+                        f2ByCust[c].push({ key, ...entry });
+                    }
 
-                    // Compare — DUAL reconciliation: Payment + Payout
+                    // Match: prefer exact key match, fallback to customer-only match
+                    const allKeys = new Set([...Object.keys(f1Filtered), ...Object.keys(f2Entries)]);
+                    const matched = new Set();
                     const results = [];
                     let paymentMatches = 0, paymentMismatches = 0;
                     let payoutMatches = 0, payoutMismatches = 0;
                     let notFoundInF2 = 0, notFoundInF1 = 0;
                     const serviceSummary = {};
 
-                    for (const customer of allCustomers) {
-                        const owed1 = file1Totals[customer];
-                        const owed2 = file2Totals[customer];
-                        const sscPayout = file2Payouts ? file2Payouts[customer] : undefined;
-                        const serviceDate = file1Dates[customer] || file2Dates[customer];
-                        const servicesList = file2Services[customer] || [];
-                        const expectedPayout = calculateExpectedPayout(servicesList);
+                    // Pass 1: Exact composite key matches
+                    for (const key of allKeys) {
+                        if (f1Filtered[key] && f2Entries[key]) {
+                            matched.add(key);
+                        }
+                    }
 
-                        // File 1 "Services" column
-                        const f1Svc = file1Services[customer] || '';
-                        const servicesDisplay = servicesList.length > 0 ? formatServices(servicesList) : (f1Svc || '-');
+                    // Pass 2: For unmatched, try customer-only matching
+                    // Group unmatched F1 and F2 by customer
+                    const unmatchedF1ByCust = {};
+                    for (const [key, entry] of Object.entries(f1Filtered)) {
+                        if (!matched.has(key)) {
+                            const c = entry.customer;
+                            if (!unmatchedF1ByCust[c]) unmatchedF1ByCust[c] = [];
+                            unmatchedF1ByCust[c].push({ key, ...entry });
+                        }
+                    }
+                    const unmatchedF2ByCust = {};
+                    for (const [key, entry] of Object.entries(f2Entries)) {
+                        if (!matched.has(key)) {
+                            const c = entry.customer;
+                            if (!unmatchedF2ByCust[c]) unmatchedF2ByCust[c] = [];
+                            unmatchedF2ByCust[c].push({ key, ...entry });
+                        }
+                    }
+
+                    // Match unmatched entries by customer (pair them by closest date)
+                    const fuzzyMatched = new Map(); // f1Key -> f2Key
+                    for (const [cust, f1List] of Object.entries(unmatchedF1ByCust)) {
+                        const f2List = unmatchedF2ByCust[cust];
+                        if (!f2List || f2List.length === 0) continue;
+
+                        // Sort both by date, pair them sequentially
+                        const sortByDate = (a, b) => (a.date || new Date(0)).getTime() - (b.date || new Date(0)).getTime();
+                        f1List.sort(sortByDate);
+                        f2List.sort(sortByDate);
+
+                        const usedF2 = new Set();
+                        for (const f1Entry of f1List) {
+                            let bestIdx = -1, bestDist = Infinity;
+                            for (let i = 0; i < f2List.length; i++) {
+                                if (usedF2.has(i)) continue;
+                                const dist = f1Entry.date && f2List[i].date
+                                    ? Math.abs(f1Entry.date.getTime() - f2List[i].date.getTime())
+                                    : 0;
+                                if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+                            }
+                            if (bestIdx >= 0) {
+                                fuzzyMatched.set(f1Entry.key, f2List[bestIdx].key);
+                                usedF2.add(bestIdx);
+                            }
+                        }
+                    }
+
+                    // Process all exact matches
+                    for (const key of matched) {
+                        const f1 = f1Filtered[key];
+                        const f2 = f2Entries[key];
+                        processMatch(f1, f2, results, serviceSummary);
+                    }
+
+                    // Process fuzzy matches
+                    const fuzzyUsedF1 = new Set();
+                    const fuzzyUsedF2 = new Set();
+                    for (const [f1Key, f2Key] of fuzzyMatched) {
+                        const f1 = f1Filtered[f1Key];
+                        const f2 = f2Entries[f2Key];
+                        processMatch(f1, f2, results, serviceSummary);
+                        fuzzyUsedF1.add(f1Key);
+                        fuzzyUsedF2.add(f2Key);
+                    }
+
+                    // Process unmatched F1 (not found in SSC Payroll)
+                    for (const [key, entry] of Object.entries(f1Filtered)) {
+                        if (matched.has(key) || fuzzyUsedF1.has(key)) continue;
+                        results.push({
+                            serviceDate: entry.date,
+                            customerCode: entry.customer,
+                            services: [],
+                            servicesDisplay: entry.service || '-',
+                            owedFile1: entry.owed,
+                            owedFile2: undefined,
+                            paymentDiff: null,
+                            paymentStatus: 'NOT FOUND in SSC Payroll',
+                            sscPayout: undefined,
+                            expectedPayout: 0,
+                            payoutDiff: null,
+                            payoutStatus: '-'
+                        });
+                        notFoundInF2++;
+                    }
+
+                    // Process unmatched F2 (not found in Transactions Record)
+                    for (const [key, entry] of Object.entries(f2Entries)) {
+                        if (matched.has(key) || fuzzyUsedF2.has(key)) continue;
+                        const servicesList = entry.services || [];
+                        const expectedPayout = calculateExpectedPayout(servicesList);
 
                         // Track service summary
                         for (const svc of servicesList) {
                             const svcName = svc.type || svc;
                             if (svcName.startsWith('Refund')) continue;
-                            if (!serviceSummary[svcName]) {
-                                serviceSummary[svcName] = { count: 0, total: 0 };
-                            }
+                            if (!serviceSummary[svcName]) serviceSummary[svcName] = { count: 0, total: 0 };
                             serviceSummary[svcName].count++;
                             serviceSummary[svcName].total += PAYOUT_RATES[svcName] || 0;
                         }
 
-                        let paymentStatus, paymentDiff = null;
                         let payoutStatus = '-', payoutDiff = null;
-
-                        // Payment comparison (File 1 Owed vs File 2 Customer)
-                        if (owed1 === undefined) {
-                            paymentStatus = 'NOT FOUND in Transactions Record';
-                            notFoundInF1++;
-                        } else if (owed2 === undefined) {
-                            paymentStatus = 'NOT FOUND in SSC Payroll';
-                            notFoundInF2++;
-                        } else {
-                            const absOwed1 = Math.abs(owed1);
-                            const absOwed2 = Math.abs(owed2);
-                            paymentDiff = absOwed1 - absOwed2;
-
-                            if (Math.abs(paymentDiff) < 0.01) {
-                                paymentStatus = 'MATCH';
-                                paymentMatches++;
-                                paymentDiff = 0;
-                            } else {
-                                paymentStatus = 'MISMATCH';
-                                paymentMismatches++;
-                            }
-                        }
-
-                        // Payout comparison (SSC Owed vs Expected Payout)
-                        if (sscPayout !== undefined && servicesList.length > 0) {
-                            payoutDiff = sscPayout - expectedPayout;
+                        if (servicesList.length > 0) {
+                            payoutDiff = entry.payout - expectedPayout;
                             if (Math.abs(payoutDiff) < 0.01) {
                                 payoutStatus = 'MATCH';
                                 payoutMatches++;
@@ -1375,20 +1454,77 @@
                                 payoutStatus = 'MISMATCH';
                                 payoutMismatches++;
                             }
-                        } else if (sscPayout !== undefined) {
-                            payoutStatus = 'NO SERVICES';
                         }
 
                         results.push({
-                            serviceDate,
-                            customerCode: customer,
+                            serviceDate: entry.date,
+                            customerCode: entry.customer,
+                            services: servicesList,
+                            servicesDisplay: servicesList.length > 0 ? formatServices(servicesList) : '-',
+                            owedFile1: undefined,
+                            owedFile2: entry.payment,
+                            paymentDiff: null,
+                            paymentStatus: 'NOT FOUND in Transactions Record',
+                            sscPayout: entry.payout,
+                            expectedPayout,
+                            payoutDiff,
+                            payoutStatus
+                        });
+                        notFoundInF1++;
+                    }
+
+                    // Helper function for matched pairs
+                    function processMatch(f1, f2, results, serviceSummary) {
+                        const servicesList = f2.services || [];
+                        const expectedPayout = calculateExpectedPayout(servicesList);
+                        const f1Svc = f1.service || '';
+                        const servicesDisplay = servicesList.length > 0 ? formatServices(servicesList) : (f1Svc || '-');
+
+                        for (const svc of servicesList) {
+                            const svcName = svc.type || svc;
+                            if (svcName.startsWith('Refund')) continue;
+                            if (!serviceSummary[svcName]) serviceSummary[svcName] = { count: 0, total: 0 };
+                            serviceSummary[svcName].count++;
+                            serviceSummary[svcName].total += PAYOUT_RATES[svcName] || 0;
+                        }
+
+                        const absOwed1 = Math.abs(f1.owed);
+                        const absOwed2 = Math.abs(f2.payment);
+                        let paymentDiff = absOwed1 - absOwed2;
+                        let paymentStatus;
+
+                        if (Math.abs(paymentDiff) < 0.01) {
+                            paymentStatus = 'MATCH';
+                            paymentMatches++;
+                            paymentDiff = 0;
+                        } else {
+                            paymentStatus = 'MISMATCH';
+                            paymentMismatches++;
+                        }
+
+                        let payoutStatus = '-', payoutDiff = null;
+                        if (f2.payout !== undefined && servicesList.length > 0) {
+                            payoutDiff = f2.payout - expectedPayout;
+                            if (Math.abs(payoutDiff) < 0.01) {
+                                payoutStatus = 'MATCH';
+                                payoutMatches++;
+                                payoutDiff = 0;
+                            } else {
+                                payoutStatus = 'MISMATCH';
+                                payoutMismatches++;
+                            }
+                        }
+
+                        results.push({
+                            serviceDate: f1.date || f2.date,
+                            customerCode: f1.customer,
                             services: servicesList,
                             servicesDisplay,
-                            owedFile1: owed1,
-                            owedFile2: owed2,
+                            owedFile1: f1.owed,
+                            owedFile2: f2.payment,
                             paymentDiff,
                             paymentStatus,
-                            sscPayout,
+                            sscPayout: f2.payout,
                             expectedPayout,
                             payoutDiff,
                             payoutStatus
@@ -1403,7 +1539,6 @@
                             'NOT FOUND in Transactions Record': 2,
                             'MATCH': 3
                         };
-                        // Primary sort by payment status, secondary by payout status
                         const pa = order[a.paymentStatus] ?? 9;
                         const pb = order[b.paymentStatus] ?? 9;
                         if (pa !== pb) return pa - pb;
@@ -1414,7 +1549,7 @@
 
                     reconciliationResults = {
                         dateRange: dateRange,
-                        totalAnalyzed: Object.keys(file1Totals).length,
+                        totalAnalyzed: Object.keys(f1Filtered).length,
                         totalBeforeFilter: totalBeforeFilter,
                         excludedByDate: excludedByDate,
                         paymentMatches: paymentMatches,
