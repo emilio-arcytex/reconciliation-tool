@@ -783,7 +783,7 @@
         };
 
         // Categories for payout rule
-        const SPECIAL_ADDONS = new Set(['Special Vehicle Install', 'Special Install', 'Special Vehicle Removal', 'Special Removal']);
+        const SPECIAL_ADDONS = new Set(['Special Vehicle Install', 'Special Install', 'Special Vehicle Removal', 'Special Removal', 'Unscheduled Service']);
         const MISSED_SERVICES = new Set(['Missed Install', 'Missed Service', 'Missed Other']);
 
         // ============================================================
@@ -1070,7 +1070,7 @@
                 const year = parseInt(slashMatch[3]);
                 if (a > 12) return new Date(year, b - 1, a); // DD/MM/YYYY
                 if (b > 12) return new Date(year, a - 1, b); // MM/DD/YYYY
-                return new Date(year, b - 1, a); // Ambiguous — assume DD/MM/YYYY
+                return new Date(year, a - 1, b); // Ambiguous — assume MM/DD/YYYY
             }
 
             // YYYY-MM-DD or ISO
