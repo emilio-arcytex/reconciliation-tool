@@ -420,8 +420,76 @@
             font-size: 0.85rem;
         }
 
-        tr:hover {
-            background: var(--bg-tertiary);
+        /* hover handled per group class */
+
+        /* Row warning icons */
+        .row-warnings {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .row-warning {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            cursor: help;
+        }
+
+        .row-warning .warn-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .warn-rounding .warn-icon {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .warn-large .warn-icon {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .warn-unknown .warn-icon {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
+        .warn-refund .warn-icon {
+            background: #fce7f3;
+            color: #9d174d;
+        }
+
+        .row-warning .warn-tooltip {
+            display: none;
+            position: absolute;
+            left: 28px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.78rem;
+            font-weight: 400;
+            color: var(--text-primary);
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        .row-warning:hover .warn-tooltip {
+            display: block;
         }
 
         .diff-positive {
@@ -432,6 +500,99 @@
         .diff-negative {
             color: var(--error);
             font-weight: 600;
+        }
+
+        /* Stats row with payment + payout groups */
+        .stats-row {
+            display: flex;
+            gap: 32px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stats-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stats-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-right: 4px;
+        }
+
+        /* Grouped rows */
+        .row-payment td {
+            border-bottom: none;
+            padding-bottom: 6px;
+            padding-top: 14px;
+        }
+
+        .row-payout td {
+            padding-top: 6px;
+            padding-bottom: 14px;
+            border-bottom: none;
+        }
+
+        /* Thick divider between each customer group */
+        .row-group-end td {
+            border-bottom: 3px solid var(--border-color);
+        }
+
+        /* Single-row entries (no payout row) */
+        .row-single td {
+            padding-top: 14px;
+            padding-bottom: 14px;
+            border-bottom: 3px solid var(--border-color);
+        }
+
+        /* Alternating group backgrounds */
+        .group-even .row-payment td,
+        .group-even .row-payout td,
+        .group-even .row-single td {
+            background: var(--bg-tertiary);
+        }
+
+        /* Hover effect on group */
+        .row-payment:hover td,
+        .row-payout:hover td,
+        .row-single:hover td {
+            background: rgba(196, 30, 58, 0.04);
+        }
+
+        .row-payment td:first-child,
+        .row-payment td:nth-child(2),
+        .row-payment td:nth-child(3) {
+            vertical-align: middle;
+        }
+
+        /* Rowspan cells need vertical centering */
+        td[rowspan] {
+            vertical-align: middle;
+        }
+
+        .type-label {
+            display: inline-block;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        .type-payment {
+            background: #e8f0fe;
+            color: #1a56db;
+        }
+
+        .type-payout {
+            background: #fef3e2;
+            color: #b45309;
         }
 
         .status-badge {
@@ -457,6 +618,163 @@
         .status-notfound {
             background: var(--warning-bg);
             color: var(--warning);
+        }
+
+        /* Orphan cards */
+        .orphan-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            margin-top: 40px;
+        }
+
+        .orphan-card {
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+        }
+
+        .orphan-header {
+            padding: 20px 24px;
+            position: relative;
+        }
+
+        .orphan-header h3 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin: 0 0 4px 0;
+        }
+
+        .orphan-header p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin: 0;
+        }
+
+        .orphan-count {
+            position: absolute;
+            top: 20px;
+            right: 24px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+
+        .warning-header {
+            background: var(--warning-bg);
+            border-bottom: 2px solid var(--warning);
+        }
+
+        .warning-header .orphan-count {
+            color: var(--warning);
+        }
+
+        .error-header {
+            background: var(--error-bg);
+            border-bottom: 2px solid var(--error);
+        }
+
+        .error-header .orphan-count {
+            color: var(--error);
+        }
+
+        .orphan-card table {
+            margin: 0;
+        }
+
+        .orphan-card th {
+            font-size: 0.75rem;
+        }
+
+        .orphan-card td {
+            font-size: 0.83rem;
+        }
+
+        /* Search bar */
+        .search-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            margin-bottom: 12px;
+            transition: border-color 0.2s;
+        }
+
+        .search-bar:focus-within {
+            border-color: var(--accent);
+        }
+
+        .search-bar svg {
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .search-bar input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            outline: none;
+        }
+
+        .search-bar input::placeholder {
+            color: var(--text-secondary);
+            font-family: 'DM Sans', sans-serif;
+        }
+
+        .search-clear {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1rem;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            line-height: 1;
+        }
+
+        .search-clear:hover {
+            background: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        /* Proof of payment icon */
+        .proof-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            background: var(--accent);
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .proof-icon:hover {
+            background: var(--accent-hover);
+            transform: scale(1.1);
+            box-shadow: 0 2px 8px rgba(196, 30, 58, 0.3);
+        }
+
+        .proof-icon svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .proof-none {
+            color: var(--text-secondary);
+            opacity: 0.2;
+            font-size: 0.75rem;
+            text-align: center;
         }
 
         .loading {
@@ -681,51 +999,25 @@
             </div>
 
             <!-- ======================== -->
-            <!-- SECTION 1: PAYMENTS      -->
+            <!-- UNIFIED RECONCILIATION  -->
             <!-- ======================== -->
             <div class="recon-section">
                 <div class="section-header">
                     <div class="section-title-row">
-                        <h2 class="section-title">💰 Payment Reconciliation</h2>
-                        <p class="section-subtitle">Customer payments: Your Transactions Record vs SSC Payroll</p>
-                    </div>
-                    <div class="section-stats">
-                        <div class="stat-pill match"><span id="payMatches">0</span> Matches</div>
-                        <div class="stat-pill mismatch"><span id="payMismatches">0</span> Mismatches</div>
+                        <h2 class="section-title">Reconciliation Details</h2>
+                        <p class="section-subtitle">Payment and payout comparison per customer visit</p>
                     </div>
                 </div>
-                <div class="table-container">
-                    <div class="table-scroll">
-                        <table id="paymentTable">
-                            <thead>
-                                <tr>
-                                    <th data-sort="serviceDate" data-table="payment" onclick="sortTable('serviceDate','payment')">Date <span class="sort-icon">↕</span></th>
-                                    <th data-sort="customerCode" data-table="payment" onclick="sortTable('customerCode','payment')">Customer <span class="sort-icon">↕</span></th>
-                                    <th data-sort="servicesDisplay" data-table="payment" onclick="sortTable('servicesDisplay','payment')">Services <span class="sort-icon">↕</span></th>
-                                    <th data-sort="owedFile1" data-table="payment" onclick="sortTable('owedFile1','payment')">Paid (Record) <span class="sort-icon">↕</span></th>
-                                    <th data-sort="owedFile2" data-table="payment" onclick="sortTable('owedFile2','payment')">Paid (SSC) <span class="sort-icon">↕</span></th>
-                                    <th data-sort="paymentDiff" data-table="payment" onclick="sortTable('paymentDiff','payment')">Difference <span class="sort-icon">↕</span></th>
-                                    <th data-sort="paymentStatus" data-table="payment" onclick="sortTable('paymentStatus','payment')">Status <span class="sort-icon">↕</span></th>
-                                </tr>
-                            </thead>
-                            <tbody id="paymentTableBody"></tbody>
-                        </table>
+                <div class="stats-row">
+                    <div class="stats-group">
+                        <span class="stats-label">💰 Payments</span>
+                        <div class="stat-pill match"><span id="payMatches">0</span> Match</div>
+                        <div class="stat-pill mismatch"><span id="payMismatches">0</span> Mismatch</div>
                     </div>
-                </div>
-            </div>
-
-            <!-- ======================== -->
-            <!-- SECTION 2: PAYOUTS       -->
-            <!-- ======================== -->
-            <div class="recon-section">
-                <div class="section-header">
-                    <div class="section-title-row">
-                        <h2 class="section-title">📋 Payout Reconciliation</h2>
-                        <p class="section-subtitle">What SSC owes us vs expected payout based on services performed</p>
-                    </div>
-                    <div class="section-stats">
-                        <div class="stat-pill match"><span id="payoutMatchesCount">0</span> Matches</div>
-                        <div class="stat-pill mismatch"><span id="payoutMismatchesCount">0</span> Mismatches</div>
+                    <div class="stats-group">
+                        <span class="stats-label">📋 Payouts</span>
+                        <div class="stat-pill match"><span id="payoutMatchesCount">0</span> Match</div>
+                        <div class="stat-pill mismatch"><span id="payoutMismatchesCount">0</span> Mismatch</div>
                     </div>
                 </div>
 
@@ -733,25 +1025,93 @@
                     <div class="service-grid" id="serviceGrid"></div>
                 </div>
 
+                <div class="search-bar">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                    </svg>
+                    <input type="text" id="searchInput" placeholder="Search by customer code..." oninput="filterTable()">
+                    <button class="search-clear" id="searchClear" onclick="clearSearch()" style="display:none;">✕</button>
+                </div>
+
                 <div class="table-container">
                     <div class="table-scroll">
-                        <table id="payoutTable">
+                        <table id="reconTable">
                             <thead>
                                 <tr>
-                                    <th data-sort="serviceDate" data-table="payout" onclick="sortTable('serviceDate','payout')">Date <span class="sort-icon">↕</span></th>
-                                    <th data-sort="customerCode" data-table="payout" onclick="sortTable('customerCode','payout')">Customer <span class="sort-icon">↕</span></th>
-                                    <th data-sort="servicesDisplay" data-table="payout" onclick="sortTable('servicesDisplay','payout')">Services <span class="sort-icon">↕</span></th>
-                                    <th data-sort="sscPayout" data-table="payout" onclick="sortTable('sscPayout','payout')">SSC Owes Us <span class="sort-icon">↕</span></th>
-                                    <th data-sort="expectedPayout" data-table="payout" onclick="sortTable('expectedPayout','payout')">Expected <span class="sort-icon">↕</span></th>
-                                    <th data-sort="payoutDiff" data-table="payout" onclick="sortTable('payoutDiff','payout')">Difference <span class="sort-icon">↕</span></th>
-                                    <th data-sort="payoutStatus" data-table="payout" onclick="sortTable('payoutStatus','payout')">Status <span class="sort-icon">↕</span></th>
+                                    <th style="width: 36px;"></th>
+                                    <th onclick="sortUnified('serviceDate')">Date <span class="sort-icon">↕</span></th>
+                                    <th onclick="sortUnified('customerCode')">Customer <span class="sort-icon">↕</span></th>
+                                    <th onclick="sortUnified('servicesDisplay')">Services <span class="sort-icon">↕</span></th>
+                                    <th>Check</th>
+                                    <th>Ours</th>
+                                    <th>SSC</th>
+                                    <th>Difference</th>
+                                    <th>Status</th>
+                                    <th style="width: 40px; text-align: center;">Proof</th>
                                 </tr>
                             </thead>
-                            <tbody id="payoutTableBody"></tbody>
+                            <tbody id="reconTableBody"></tbody>
                         </table>
                     </div>
                 </div>
             </div>
+
+            <!-- ======================== -->
+            <!-- ORPHAN CARDS             -->
+            <!-- ======================== -->
+            <div class="orphan-cards" id="orphanCards">
+
+                <!-- Card: In your records but NOT in SSC Payroll -->
+                <div class="orphan-card" id="cardNotInSSC" style="display:none;">
+                    <div class="orphan-header warning-header">
+                        <h3>⚠️ In Your Records — Not in SSC Payroll</h3>
+                        <p>These transactions exist in your sheet within the analyzed timeframe, but SSC has no matching record.</p>
+                        <span class="orphan-count" id="countNotInSSC">0</span>
+                    </div>
+                    <div class="table-scroll" style="max-height: 350px;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Customer</th>
+                                    <th>Services</th>
+                                    <th>Owed (Record)</th>
+                                    <th style="width: 40px; text-align: center;">Proof</th>
+                                </tr>
+                            </thead>
+                            <tbody id="notInSSCBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Card: In SSC Payroll but NOT in your records -->
+                <div class="orphan-card" id="cardNotInRecord" style="display:none;">
+                    <div class="orphan-header error-header">
+                        <h3>🔍 In SSC Payroll — Not in Your Records</h3>
+                        <p>SSC processed these transactions, but no matching entry exists in your sheet. Payout calculation included.</p>
+                        <span class="orphan-count" id="countNotInRecord">0</span>
+                    </div>
+                    <div class="table-scroll" style="max-height: 400px;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Customer</th>
+                                    <th>Services</th>
+                                    <th>SSC Payment</th>
+                                    <th>SSC Payout</th>
+                                    <th>Expected Payout</th>
+                                    <th>Payout Diff</th>
+                                    <th>Payout Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="notInRecordBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
         </div>
 
         <footer>
@@ -774,6 +1134,7 @@
             'Missed Install': 50,
             'Missed Service': 20,
             'Missed Other': 20,
+            'Missed Removal': 20,
             'Service Call': 95,  // per hour base
             // Special add-ons (always added to base, not standalone)
             'Special Vehicle Install': 75,
@@ -784,7 +1145,7 @@
 
         // Categories for payout rule
         const SPECIAL_ADDONS = new Set(['Special Vehicle Install', 'Special Install', 'Special Vehicle Removal', 'Special Removal', 'Unscheduled Service']);
-        const MISSED_SERVICES = new Set(['Missed Install', 'Missed Service', 'Missed Other']);
+        const MISSED_SERVICES = new Set(['Missed Install', 'Missed Service', 'Missed Other', 'Missed Removal']);
 
         // ============================================================
         // GOOGLE SHEETS CONFIG
@@ -1285,6 +1646,9 @@
         function extractFile1Transactions(data, customerCol, owedCol, dateCol, servicesCol) {
             const entries = {}; // key = "custNo_YYYY-MM-DD"
 
+            // Find Proof of Payment column
+            const proofCol = findColumnByPattern(data, /proof.*payment/i);
+
             for (const row of data) {
                 const custRaw = row[customerCol];
                 if (custRaw === null || custRaw === undefined || custRaw === '' || isNaN(Number(custRaw)) || Number(custRaw) <= 0) continue;
@@ -1294,20 +1658,34 @@
                 const dateKey = d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : 'nodate';
                 const key = `${cust}_${dateKey}`;
 
+                const proofUrl = proofCol ? (row[proofCol] || null) : null;
+
                 if (entries[key]) {
                     // Same customer, same date — sum the amounts
                     entries[key].owed += parseFloat(row[owedCol]) || 0;
+                    if (proofUrl && !entries[key].proofUrl) entries[key].proofUrl = proofUrl;
                 } else {
                     entries[key] = {
                         customer: cust,
                         date: d,
                         owed: parseFloat(row[owedCol]) || 0,
-                        service: servicesCol ? (row[servicesCol] || '') : ''
+                        service: servicesCol ? (row[servicesCol] || '') : '',
+                        proofUrl: proofUrl
                     };
                 }
             }
 
             return entries;
+        }
+
+        // Generic column finder by regex
+        function findColumnByPattern(data, pattern) {
+            if (!data || data.length === 0) return null;
+            const firstRow = data[0];
+            for (const key of Object.keys(firstRow)) {
+                if (pattern.test(key)) return key;
+            }
+            return null;
         }
 
         // FILE 1: Count total unique visits (customer+date pairs)
@@ -1560,7 +1938,8 @@
                             sscPayout: undefined,
                             expectedPayout: 0,
                             payoutDiff: null,
-                            payoutStatus: '-'
+                            payoutStatus: '-',
+                            proofUrl: entry.proofUrl || null
                         });
                         notFoundInF2++;
                     }
@@ -1605,7 +1984,8 @@
                             sscPayout: entry.payout,
                             expectedPayout,
                             payoutDiff,
-                            payoutStatus
+                            payoutStatus,
+                            proofUrl: null
                         });
                         notFoundInF1++;
                     }
@@ -1664,7 +2044,8 @@
                             sscPayout: f2.payout,
                             expectedPayout,
                             payoutDiff,
-                            payoutStatus
+                            payoutStatus,
+                            proofUrl: f1.proofUrl || null
                         });
                     }
 
@@ -1711,27 +2092,19 @@
         }
 
         // ============================================================
-        // SORTING (per-table)
+        // SORTING (unified table)
         // ============================================================
-        let sortState = {
-            payment: { column: null, direction: 'asc' },
-            payout: { column: null, direction: 'asc' }
-        };
+        let currentSort = { column: null, direction: 'asc' };
 
-        function sortTable(column, tableId) {
-            const state = sortState[tableId];
-            if (state.column === column) {
-                state.direction = state.direction === 'asc' ? 'desc' : 'asc';
+        function sortUnified(column) {
+            if (currentSort.column === column) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
             } else {
-                state.column = column;
-                state.direction = 'asc';
+                currentSort.column = column;
+                currentSort.direction = 'asc';
             }
 
-            const list = tableId === 'payment'
-                ? reconciliationResults._paymentRows
-                : reconciliationResults._payoutRows;
-
-            list.sort((a, b) => {
+            reconciliationResults.details.sort((a, b) => {
                 let valA = a[column];
                 let valB = b[column];
 
@@ -1749,77 +2122,267 @@
                 } else {
                     result = valA < valB ? -1 : valA > valB ? 1 : 0;
                 }
-                return state.direction === 'asc' ? result : -result;
+                return currentSort.direction === 'asc' ? result : -result;
             });
 
-            // Update header icons for this table only
-            const table = document.getElementById(tableId + 'Table');
+            // Update header icons
+            const table = document.getElementById('reconTable');
             table.querySelectorAll('th').forEach(th => {
                 th.classList.remove('sorted');
                 const icon = th.querySelector('.sort-icon');
                 if (icon) icon.textContent = '↕';
             });
-            const activeHeader = table.querySelector(`th[data-sort="${column}"]`);
-            if (activeHeader) {
-                activeHeader.classList.add('sorted');
-                const icon = activeHeader.querySelector('.sort-icon');
-                if (icon) icon.textContent = state.direction === 'asc' ? '↑' : '↓';
-            }
 
-            if (tableId === 'payment') renderPaymentTable();
-            else renderPayoutTable();
+            renderUnifiedTable();
         }
 
         // ============================================================
-        // RENDER PAYMENT TABLE
+        // WARNING DETECTION
         // ============================================================
-        function renderPaymentTable() {
-            const rows = reconciliationResults._paymentRows;
-            const tbody = document.getElementById('paymentTableBody');
+        function detectWarnings(row) {
+            const warnings = [];
+
+            // Payment rounding (small diff, < $1)
+            if (row.paymentDiff !== null && Math.abs(row.paymentDiff) > 0.01 && Math.abs(row.paymentDiff) <= 1) {
+                warnings.push({ type: 'rounding', icon: '¢', msg: `Small rounding difference ($${Math.abs(row.paymentDiff).toFixed(2)}) — likely cents discrepancy between systems` });
+            }
+
+            // Large payment difference (> $50)
+            if (row.paymentDiff !== null && Math.abs(row.paymentDiff) > 50) {
+                warnings.push({ type: 'large', icon: '!', msg: `Large payment discrepancy ($${Math.abs(row.paymentDiff).toFixed(2)}) — needs investigation` });
+            }
+
+            // Unknown service types
+            const knownTypes = new Set([...Object.keys(PAYOUT_RATES), ...SPECIAL_ADDONS, ...MISSED_SERVICES]);
+            const servicesList = row.services || [];
+            for (const svc of servicesList) {
+                const name = svc.type || svc;
+                if (!name.startsWith('Refund') && !knownTypes.has(name)) {
+                    warnings.push({ type: 'unknown', icon: '?', msg: `Unknown service: "${name}" — payout may be inaccurate` });
+                    break;
+                }
+            }
+
+            // Orphan refund (refund without matching service in the visit)
+            const svcNames = servicesList.map(s => s.type || s);
+            const refunds = svcNames.filter(s => s.startsWith('Refund'));
+            const nonRefunds = svcNames.filter(s => !s.startsWith('Refund'));
+            for (const refund of refunds) {
+                const refundedName = refund.replace(/^Refund\s*-\s*/, '').replace(' Appointment', '').trim();
+                const hasMatch = nonRefunds.some(s => s === refundedName || s.toLowerCase().includes(refundedName.toLowerCase()));
+                if (!hasMatch) {
+                    warnings.push({ type: 'refund', icon: '↩', msg: `Refund "${refund}" has no matching service in this visit` });
+                    break;
+                }
+            }
+
+            // Payout mismatch
+            if (row.payoutDiff !== null && Math.abs(row.payoutDiff) > 0.01) {
+                warnings.push({ type: 'large', icon: '$', msg: `Payout discrepancy: SSC owes $${row.sscPayout?.toFixed(2)}, expected $${(row.expectedPayout||0).toFixed(2)}` });
+            }
+
+            return warnings;
+        }
+
+        function renderWarningsHTML(warnings) {
+            if (warnings.length === 0) return '';
+            return `<div class="row-warnings">${warnings.map(w =>
+                `<span class="row-warning warn-${w.type}"><span class="warn-icon">${w.icon}</span><span class="warn-tooltip">${w.msg}</span></span>`
+            ).join('')}</div>`;
+        }
+
+        // ============================================================
+        // PROOF OF PAYMENT ICON
+        // ============================================================
+        function proofIconHTML(url) {
+            if (!url) return '<span class="proof-none">—</span>';
+            return `<a href="${url}" target="_blank" rel="noopener" class="proof-icon" title="View proof of payment">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+                </svg>
+            </a>`;
+        }
+
+        // ============================================================
+        // RENDER UNIFIED TABLE (2 rows per visit)
+        // ============================================================
+        function renderUnifiedTable() {
+            const r = reconciliationResults;
+            const tbody = document.getElementById('reconTableBody');
             tbody.innerHTML = '';
 
-            for (const row of rows) {
-                const tr = document.createElement('tr');
-                const statusClass = row.paymentStatus === 'MATCH' ? 'status-match' :
-                                    row.paymentStatus === 'MISMATCH' ? 'status-mismatch' : 'status-notfound';
+            const matchedRows = r.details.filter(row =>
+                !row.paymentStatus.includes('NOT FOUND')
+            );
 
-                tr.innerHTML = `
-                    <td>${formatDate(row.serviceDate)}</td>
-                    <td>${row.customerCode}</td>
-                    <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
-                    <td>${row.owedFile1 !== undefined ? '$' + row.owedFile1.toFixed(2) : '-'}</td>
-                    <td>${row.owedFile2 !== undefined ? '$' + row.owedFile2.toFixed(2) : '-'}</td>
-                    <td class="${row.paymentDiff > 0 ? 'diff-positive' : row.paymentDiff < 0 ? 'diff-negative' : ''}">${row.paymentDiff !== null ? '$' + row.paymentDiff.toFixed(2) : '-'}</td>
-                    <td><span class="status-badge ${statusClass}">${row.paymentStatus}</span></td>
-                `;
-                tbody.appendChild(tr);
+            let groupIndex = 0;
+
+            for (const row of matchedRows) {
+                const isEven = groupIndex % 2 === 0;
+                const groupClass = isEven ? 'group-even' : '';
+                const hasPayout = row.sscPayout !== undefined;
+                const warnings = detectWarnings(row);
+                const warningsHTML = renderWarningsHTML(warnings);
+
+                const payStatusClass = row.paymentStatus === 'MATCH' ? 'status-match' :
+                                       row.paymentStatus === 'MISMATCH' ? 'status-mismatch' : 'status-notfound';
+
+                if (hasPayout) {
+                    const tr1 = document.createElement('tr');
+                    tr1.className = `row-payment ${groupClass}`;
+                    tr1.innerHTML = `
+                        <td rowspan="2" style="width: 36px; padding: 8px;">${warningsHTML}</td>
+                        <td rowspan="2">${formatDate(row.serviceDate)}</td>
+                        <td rowspan="2">${row.customerCode}</td>
+                        <td rowspan="2" style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
+                        <td><span class="type-label type-payment">Payment</span></td>
+                        <td>${row.owedFile1 !== undefined ? '$' + row.owedFile1.toFixed(2) : '-'}</td>
+                        <td>${row.owedFile2 !== undefined ? '$' + row.owedFile2.toFixed(2) : '-'}</td>
+                        <td class="${row.paymentDiff > 0 ? 'diff-positive' : row.paymentDiff < 0 ? 'diff-negative' : ''}">${row.paymentDiff !== null ? '$' + row.paymentDiff.toFixed(2) : '-'}</td>
+                        <td><span class="status-badge ${payStatusClass}">${row.paymentStatus}</span></td>
+                        <td rowspan="2" style="text-align: center;">${proofIconHTML(row.proofUrl)}</td>
+                    `;
+                    tbody.appendChild(tr1);
+
+                    const tr2 = document.createElement('tr');
+                    tr2.className = `row-payout row-group-end ${groupClass}`;
+                    const payoutStatusClass = row.payoutStatus === 'MATCH' ? 'status-match' :
+                                              row.payoutStatus === 'MISMATCH' ? 'status-mismatch' : 'status-notfound';
+                    tr2.innerHTML = `
+                        <td><span class="type-label type-payout">Payout</span></td>
+                        <td>$${(row.expectedPayout || 0).toFixed(2)}</td>
+                        <td>${row.sscPayout !== undefined ? '$' + row.sscPayout.toFixed(2) : '-'}</td>
+                        <td class="${row.payoutDiff > 0 ? 'diff-positive' : row.payoutDiff < 0 ? 'diff-negative' : ''}">${row.payoutDiff !== null ? '$' + row.payoutDiff.toFixed(2) : '-'}</td>
+                        <td><span class="status-badge ${payoutStatusClass}">${row.payoutStatus}</span></td>
+                    `;
+                    tbody.appendChild(tr2);
+                } else {
+                    const tr = document.createElement('tr');
+                    tr.className = `row-single ${groupClass}`;
+                    tr.innerHTML = `
+                        <td style="width: 36px; padding: 8px;">${warningsHTML}</td>
+                        <td>${formatDate(row.serviceDate)}</td>
+                        <td>${row.customerCode}</td>
+                        <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
+                        <td><span class="type-label type-payment">Payment</span></td>
+                        <td>${row.owedFile1 !== undefined ? '$' + row.owedFile1.toFixed(2) : '-'}</td>
+                        <td>${row.owedFile2 !== undefined ? '$' + row.owedFile2.toFixed(2) : '-'}</td>
+                        <td class="${row.paymentDiff > 0 ? 'diff-positive' : row.paymentDiff < 0 ? 'diff-negative' : ''}">${row.paymentDiff !== null ? '$' + row.paymentDiff.toFixed(2) : '-'}</td>
+                        <td><span class="status-badge ${payStatusClass}">${row.paymentStatus}</span></td>
+                        <td style="text-align: center;">${proofIconHTML(row.proofUrl)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                }
+
+                groupIndex++;
             }
         }
 
         // ============================================================
-        // RENDER PAYOUT TABLE
+        // RENDER ORPHAN CARDS
         // ============================================================
-        function renderPayoutTable() {
-            const rows = reconciliationResults._payoutRows;
-            const tbody = document.getElementById('payoutTableBody');
-            tbody.innerHTML = '';
+        function renderOrphanCards() {
+            const r = reconciliationResults;
 
-            for (const row of rows) {
-                const statusClass = row.payoutStatus === 'MATCH' ? 'status-match' :
-                                    row.payoutStatus === 'MISMATCH' ? 'status-mismatch' : 'status-notfound';
+            // Card 1: In your records, NOT in SSC Payroll
+            const notInSSC = r.details.filter(row => row.paymentStatus === 'NOT FOUND in SSC Payroll');
+            const card1 = document.getElementById('cardNotInSSC');
+            const body1 = document.getElementById('notInSSCBody');
+            body1.innerHTML = '';
 
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${formatDate(row.serviceDate)}</td>
-                    <td>${row.customerCode}</td>
-                    <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
-                    <td>${row.sscPayout !== undefined ? '$' + row.sscPayout.toFixed(2) : '-'}</td>
-                    <td>$${(row.expectedPayout || 0).toFixed(2)}</td>
-                    <td class="${row.payoutDiff > 0 ? 'diff-positive' : row.payoutDiff < 0 ? 'diff-negative' : ''}">${row.payoutDiff !== null ? '$' + row.payoutDiff.toFixed(2) : '-'}</td>
-                    <td><span class="status-badge ${statusClass}">${row.payoutStatus}</span></td>
-                `;
-                tbody.appendChild(tr);
+            if (notInSSC.length > 0) {
+                card1.style.display = 'block';
+                document.getElementById('countNotInSSC').textContent = notInSSC.length;
+
+                for (const row of notInSSC) {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${formatDate(row.serviceDate)}</td>
+                        <td>${row.customerCode}</td>
+                        <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
+                        <td>${row.owedFile1 !== undefined ? '$' + row.owedFile1.toFixed(2) : '-'}</td>
+                        <td style="text-align: center;">${proofIconHTML(row.proofUrl)}</td>
+                    `;
+                    body1.appendChild(tr);
+                }
+            } else {
+                card1.style.display = 'none';
             }
+
+            // Card 2: In SSC Payroll, NOT in your records (with payout calc)
+            const notInRecord = r.details.filter(row => row.paymentStatus === 'NOT FOUND in Transactions Record');
+            const card2 = document.getElementById('cardNotInRecord');
+            const body2 = document.getElementById('notInRecordBody');
+            body2.innerHTML = '';
+
+            if (notInRecord.length > 0) {
+                card2.style.display = 'block';
+                document.getElementById('countNotInRecord').textContent = notInRecord.length;
+
+                for (const row of notInRecord) {
+                    const payoutStatusClass = row.payoutStatus === 'MATCH' ? 'status-match' :
+                                              row.payoutStatus === 'MISMATCH' ? 'status-mismatch' : 'status-notfound';
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${formatDate(row.serviceDate)}</td>
+                        <td>${row.customerCode}</td>
+                        <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
+                        <td>${row.owedFile2 !== undefined ? '$' + row.owedFile2.toFixed(2) : '-'}</td>
+                        <td>${row.sscPayout !== undefined ? '$' + row.sscPayout.toFixed(2) : '-'}</td>
+                        <td>$${(row.expectedPayout || 0).toFixed(2)}</td>
+                        <td class="${row.payoutDiff > 0 ? 'diff-positive' : row.payoutDiff < 0 ? 'diff-negative' : ''}">${row.payoutDiff !== null ? '$' + row.payoutDiff.toFixed(2) : '-'}</td>
+                        <td><span class="status-badge ${payoutStatusClass}">${row.payoutStatus}</span></td>
+                    `;
+                    body2.appendChild(tr);
+                }
+            } else {
+                card2.style.display = 'none';
+            }
+        }
+
+        // ============================================================
+        // SEARCH / FILTER
+        // ============================================================
+        function filterTable() {
+            const query = document.getElementById('searchInput').value.trim();
+            const clearBtn = document.getElementById('searchClear');
+            clearBtn.style.display = query ? 'block' : 'none';
+
+            const tbody = document.getElementById('reconTableBody');
+            const rows = tbody.querySelectorAll('tr');
+
+            if (!query) {
+                rows.forEach(tr => tr.style.display = '');
+                return;
+            }
+
+            let i = 0;
+            while (i < rows.length) {
+                const tr = rows[i];
+                const hasRowspan = tr.querySelector('td[rowspan]');
+
+                if (hasRowspan) {
+                    const custCell = tr.children[2];
+                    const custText = custCell ? custCell.textContent : '';
+                    const match = custText.includes(query);
+                    tr.style.display = match ? '' : 'none';
+                    if (i + 1 < rows.length) {
+                        rows[i + 1].style.display = match ? '' : 'none';
+                    }
+                    i += 2;
+                } else {
+                    const custCell = tr.children[2];
+                    const custText = custCell ? custCell.textContent : '';
+                    tr.style.display = custText.includes(query) ? '' : 'none';
+                    i++;
+                }
+            }
+        }
+
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('searchClear').style.display = 'none';
+            filterTable();
         }
 
         // ============================================================
@@ -1843,28 +2406,22 @@
             document.getElementById('totalNotFoundF1').textContent = r.notFoundInF1;
             document.getElementById('totalNotFoundF2').textContent = r.notFoundInF2;
 
-            // Payment stats
+            // Stats
             document.getElementById('payMatches').textContent = r.paymentMatches;
             document.getElementById('payMismatches').textContent = r.paymentMismatches;
-
-            // Payout stats
             document.getElementById('payoutMatchesCount').textContent = r.payoutMatches;
             document.getElementById('payoutMismatchesCount').textContent = r.payoutMismatches;
 
-            // Build separate row lists for the two tables
-            // Payment table: all rows sorted by payment status
-            r._paymentRows = [...r.details].sort((a, b) => {
-                const order = { 'MISMATCH': 0, 'NOT FOUND in SSC Payroll': 1, 'NOT FOUND in Transactions Record': 2, 'MATCH': 3 };
-                return (order[a.paymentStatus] ?? 9) - (order[b.paymentStatus] ?? 9);
+            // Sort: mismatches first, then not found, then matches
+            // Priority: any mismatch (payment or payout) → not found → all match
+            r.details.sort((a, b) => {
+                function score(row) {
+                    if (row.paymentStatus === 'MISMATCH' || row.payoutStatus === 'MISMATCH') return 0;
+                    if (row.paymentStatus.includes('NOT FOUND')) return 1;
+                    return 2;
+                }
+                return score(a) - score(b);
             });
-
-            // Payout table: only rows that have payout data, sorted by payout status
-            r._payoutRows = r.details
-                .filter(row => row.sscPayout !== undefined)
-                .sort((a, b) => {
-                    const order = { 'MISMATCH': 0, '-': 1, 'NO SERVICES': 2, 'MATCH': 3 };
-                    return (order[a.payoutStatus] ?? 9) - (order[b.payoutStatus] ?? 9);
-                });
 
             // Service breakdown
             const serviceSummaryDiv = document.getElementById('serviceSummary');
@@ -1905,11 +2462,9 @@
                 serviceSummaryDiv.style.display = 'none';
             }
 
-            // Reset sort state
-            sortState = { payment: { column: null, direction: 'asc' }, payout: { column: null, direction: 'asc' } };
-
-            renderPaymentTable();
-            renderPayoutTable();
+            currentSort = { column: null, direction: 'asc' };
+            renderUnifiedTable();
+            renderOrphanCards();
 
             resultsDiv.classList.add('show');
             downloadBtn.style.display = 'inline-flex';
@@ -1942,7 +2497,7 @@
                 ['Service Date', 'Customer Code', 'Services', 'Paid (Record)', 'Paid (SSC)', 'Difference', 'Status']
             ];
 
-            for (const row of r._paymentRows) {
+            for (const row of r.details) {
                 payData.push([
                     formatDate(row.serviceDate),
                     row.customerCode,
@@ -1979,7 +2534,8 @@
             payoutData.push(['']);
             payoutData.push(['Service Date', 'Customer Code', 'Services', 'SSC Owes Us', 'Expected Payout', 'Difference', 'Status']);
 
-            for (const row of r._payoutRows) {
+            for (const row of r.details) {
+                if (row.sscPayout === undefined) continue;
                 payoutData.push([
                     formatDate(row.serviceDate),
                     row.customerCode,
