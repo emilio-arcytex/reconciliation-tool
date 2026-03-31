@@ -2077,13 +2077,14 @@
                     (transactionId && r.transactionId && String(r.transactionId) === String(transactionId)) ||
                     (r.customerCode === customerCode && formatDate(r.serviceDate) === serviceDateStr)
                 );
-                if (mainRow) {
-                    mainRow.reconciled = true;
-                    // Re-render main table to show greyed state immediately
-                    renderUnifiedTable();
-                }
+                if (mainRow) mainRow.reconciled = true;
 
                 sheetHeaders = null;
+
+                // Re-render everything to reflect updated reconciled state
+                renderUnifiedTable();
+                renderOrphanCards();
+
                 showToast(`Customer ${customerCode} marked as reconciled ✓`, 'success');
 
             } catch (e) {
@@ -4232,7 +4233,7 @@
                 if (batchResp.status === 403) throw new Error('NO_ACCESS');
                 if (!batchResp.ok) { const e = await batchResp.json().catch(() => ({})); throw new Error(e.error?.message || `SHEETS_ERROR:${batchResp.status}`); }
 
-                // Update UI
+                // Update UI - replace action cell immediately
                 const td = confirmBtn.closest('td');
                 td.innerHTML = `<span class="reconciled-row-badge">✓ Linked #${selectedTxId}</span>`;
 
@@ -4244,6 +4245,10 @@
                 if (missedRow) { missedRow.reconciled = true; missedRow.linkedTxId = selectedTxId; }
 
                 sheetHeaders = null;
+
+                // Re-render both the critical banner and missed card to reflect new state
+                renderOrphanCards();
+
                 showToast(`Linked to Transaction #${selectedTxId} ✓`, 'success');
 
             } catch (e) {
