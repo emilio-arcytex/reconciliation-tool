@@ -1942,7 +1942,7 @@
             const dateColIdx   = headers.findIndex(h => h && h.toLowerCase().includes('date'));
             const svcColIdx    = headers.findIndex(h => h && h.toLowerCase().includes('services'));
             const reconColIdx  = headers.findIndex(h => h && h.includes('Missed Service Reconciliated'));
-            const txIdColIdx   = headers.findIndex(h => h && /^transaction\s*id$/i.test(h.trim()));
+            const txIdColIdx   = headers.findIndex(h => h && /transaction.*id/i.test(h.trim()));
 
             if (custColIdx === -1) throw new Error('HEADER_NOT_FOUND');
             if (reconColIdx === -1) throw new Error('RECON_COL_NOT_FOUND');
@@ -2646,7 +2646,7 @@
             // Find "Missed Service Reconciliated?" column (used for all rows)
             const reconCol = findColumnByPattern(data, /missed.*reconcili/i);
             // Find "Transaction ID" column
-            const txIdCol = findColumnByPattern(data, /^transaction\s*id$/i);
+            const txIdCol = findColumnByPattern(data, /transaction.*id/i);
 
             for (const row of data) {
                 const custRaw = row[customerCol];
@@ -3534,12 +3534,12 @@
 
             if (missedRows.length > 0) {
                 cardMissed.style.display = 'block';
-                document.getElementById('countMissed').textContent = missedRows.length;
+                document.getElementById('countMissed').textContent = missedRows.filter(r => !r.reconciled).length;
 
                 // Build dropdown options from all F1 transaction IDs for linking
                 const txOptions = (file1Data || [])
                     .map(r => {
-                        const idKey = Object.keys(r).find(k => /^transaction\s*id$/i.test(k));
+                        const idKey   = Object.keys(r).find(k => /transaction.*id/i.test(k));
                         const custKey = Object.keys(r).find(k => k.includes('Customer No') || k.includes('Customer Code'));
                         const dateKey = Object.keys(r).find(k => k.toLowerCase().includes('date'));
                         const svcKey  = Object.keys(r).find(k => k.toLowerCase().includes('services'));
@@ -3827,10 +3827,10 @@
             document.getElementById('tabCountMismatch').textContent = mismatchRows.length;
             document.getElementById('tabCountOk').textContent = okRows.length;
             document.getElementById('tabCountNotFound').textContent = notFoundRows.length;
-            document.getElementById('tabCountMissed').textContent = (r.missedResults || []).length;
+            document.getElementById('tabCountMissed').textContent = (r.missedResults || []).filter(r => !r.reconciled).length;
 
             // Critical banner — unpaid missed appointments (in our sheet, not in SSC)
-            const criticalRows = (r.missedResults || []).filter(row => row.missedStatus === 'CRITICAL');
+            const criticalRows = (r.missedResults || []).filter(row => row.missedStatus === 'CRITICAL' && !row.reconciled);
             const criticalBanner = document.getElementById('criticalBanner');
             const criticalBody = document.getElementById('criticalBody');
             criticalBody.innerHTML = '';
@@ -3842,7 +3842,7 @@
                 // Build dropdown options for the critical banner too
                 const criticalTxOptions = (file1Data || [])
                     .map(r => {
-                        const idKey  = Object.keys(r).find(k => /^transaction\s*id$/i.test(k));
+                        const idKey   = Object.keys(r).find(k => /transaction.*id/i.test(k));
                         const custKey = Object.keys(r).find(k => k.includes('Customer No') || k.includes('Customer Code'));
                         const dateKey = Object.keys(r).find(k => k.toLowerCase().includes('date'));
                         const svcKey  = Object.keys(r).find(k => k.toLowerCase().includes('services'));
@@ -4187,7 +4187,7 @@
                 const headers = rows[headerIdx];
                 const reconColIdx  = headers.findIndex(h => h && h.includes('Missed Service Reconciliated'));
                 const linkedColIdx = headers.findIndex(h => h && /linked.*transaction/i.test(h));
-                const txIdColIdx   = headers.findIndex(h => h && /^transaction\s*id$/i.test(h.trim()));
+                const txIdColIdx   = headers.findIndex(h => h && /transaction.*id/i.test(h.trim()));
                 const custColIdx   = headers.findIndex(h => h && (h.includes('Customer No') || h.includes('Customer Code')));
                 const dateColIdx   = headers.findIndex(h => h && h.toLowerCase().includes('date'));
 
