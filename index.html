@@ -1800,7 +1800,11 @@
         // ============================================================
         function handleGoogleSignIn() {
             if (!GOOGLE_CLIENT_ID) {
-                showToast('OAuth Client ID not configured. See setup instructions.', 'error');
+                showToast('OAuth Client ID not configured.', 'error');
+                return;
+            }
+            if (typeof google === 'undefined' || !google.accounts) {
+                showToast('Google sign-in is still loading — please try again in a moment.', 'error');
                 return;
             }
             setAuthState('connecting');
@@ -1817,7 +1821,6 @@
                     googleTokenExpiry = Date.now() + (response.expires_in * 1000);
                     setAuthState('connected');
                     showToast('Connected to Google Sheets ✓', 'success');
-                    // Re-render missed table to enable buttons
                     if (reconciliationResults) renderOrphanCards();
                 }
             });
@@ -2115,15 +2118,11 @@
         reconcileBtn.addEventListener('click', runReconciliation);
         downloadBtn.addEventListener('click', downloadReport);
 
-        // Auto-fetch File 1 on page load
+        // Auto-fetch File 1 on page load — single call, wait for DOM
         window.addEventListener('DOMContentLoaded', () => {
-            fetchFromDrive();
             setupDragDrop();
+            fetchFromDrive();
         });
-        if (document.readyState !== 'loading') {
-            fetchFromDrive();
-            setupDragDrop();
-        }
 
         // ============================================================
         // DRAG AND DROP
@@ -2290,6 +2289,7 @@
                     }
                 }
             } catch (e) {
+                // silently fall through to JSONP
             }
 
             // Try Strategy 2: JSONP via gviz
@@ -2297,8 +2297,10 @@
                 const data = await fetchViaJSONP();
                 onFetchSuccess(data, fetchBtn, fileName);
             } catch (e) {
-                console.error('All fetch strategies failed:', e);
-                fetchError.textContent = 'Could not load sheet. Check that it is Published to web (File → Share → Publish to web).';
+                const isTimeout = e.message === 'JSONP timed out';
+                fetchError.textContent = isTimeout
+                    ? 'Could not reach Google Sheets — check your internet connection and that the sheet is published to web (File → Share → Publish to web).'
+                    : 'Could not load sheet. Make sure it is published to web: File → Share → Publish to web → select the sheet → Publish.';
                 fetchError.classList.add('show');
                 fetchBtn.innerHTML = `
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -4069,7 +4071,6 @@
             } else {
                 el.textContent = `${txRows.length} transactions`;
             }
-        }
         }
 
         // ============================================================
