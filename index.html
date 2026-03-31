@@ -914,6 +914,115 @@
         .fetch-error.show {
             display: block;
         }
+
+        /* Filter tabs */
+        .filter-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .filter-tab {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 16px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            font-family: inherit;
+            border: 1px solid var(--border-color);
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .filter-tab:hover {
+            border-color: var(--accent);
+            color: var(--text-primary);
+        }
+
+        .filter-tab.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        .filter-tab .tab-count {
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+            padding: 1px 7px;
+            font-size: 0.78rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .filter-tab:not(.active) .tab-count {
+            background: var(--border-color);
+            color: var(--text-primary);
+        }
+
+        /* Discrepancy summary banner */
+        .discrepancy-banner {
+            display: flex;
+            gap: 16px;
+            padding: 14px 20px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .disc-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .disc-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .disc-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .disc-value.negative { color: var(--error); }
+        .disc-value.positive { color: var(--success); }
+        .disc-value.neutral  { color: var(--text-primary); }
+
+        .disc-divider {
+            width: 1px;
+            height: 36px;
+            background: var(--border-color);
+        }
+
+        /* Drag-and-drop highlight */
+        .upload-card.drag-over {
+            border-color: var(--accent);
+            background: rgba(196, 30, 58, 0.06);
+            transform: scale(1.01);
+        }
+
+        /* Reset / new reconciliation button */
+        .btn-reset {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-reset:hover {
+            background: var(--border-color);
+            color: var(--text-primary);
+        }
     </style>
 </head>
 <body>
@@ -968,6 +1077,12 @@
                 </svg>
                 Download Report
             </button>
+            <button class="btn btn-reset" id="resetBtn" style="display: none;" onclick="resetApp()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
+                </svg>
+                New Payroll
+            </button>
         </div>
 
         <div class="loading" id="loading">
@@ -995,6 +1110,29 @@
                 <div class="overview-item">
                     <span class="overview-num" id="totalNotFoundF2">0</span>
                     <span class="overview-label">Not in SSC</span>
+                </div>
+            </div>
+
+            <!-- DISCREPANCY SUMMARY BANNER -->
+            <div class="discrepancy-banner" id="discrepancyBanner">
+                <div class="disc-item">
+                    <span class="disc-label">Payment Discrepancy</span>
+                    <span class="disc-value" id="discPayment">$0.00</span>
+                </div>
+                <div class="disc-divider"></div>
+                <div class="disc-item">
+                    <span class="disc-label">Payout Discrepancy</span>
+                    <span class="disc-value" id="discPayout">$0.00</span>
+                </div>
+                <div class="disc-divider"></div>
+                <div class="disc-item">
+                    <span class="disc-label">Total at Risk</span>
+                    <span class="disc-value" id="discTotal">$0.00</span>
+                </div>
+                <div class="disc-divider"></div>
+                <div class="disc-item">
+                    <span class="disc-label">Mismatched Visits</span>
+                    <span class="disc-value neutral" id="discMismatchCount">0</span>
                 </div>
             </div>
 
@@ -1031,6 +1169,13 @@
                     </svg>
                     <input type="text" id="searchInput" placeholder="Search by customer code..." oninput="filterTable()">
                     <button class="search-clear" id="searchClear" onclick="clearSearch()" style="display:none;">✕</button>
+                </div>
+
+                <div class="filter-tabs" id="filterTabs">
+                    <button class="filter-tab active" data-filter="all" onclick="setFilter('all')">All <span class="tab-count" id="tabCountAll">0</span></button>
+                    <button class="filter-tab" data-filter="mismatch" onclick="setFilter('mismatch')">⚠ Mismatches <span class="tab-count" id="tabCountMismatch">0</span></button>
+                    <button class="filter-tab" data-filter="notfound" onclick="setFilter('notfound')">? Not Found <span class="tab-count" id="tabCountNotFound">0</span></button>
+                    <button class="filter-tab" data-filter="ok" onclick="setFilter('ok')">✓ OK <span class="tab-count" id="tabCountOk">0</span></button>
                 </div>
 
                 <div class="table-container">
@@ -1156,6 +1301,7 @@
         let file1Data = null;
         let file2Data = null;
         let reconciliationResults = null;
+        let activeFilter = 'all';
 
         const file2Input = document.getElementById('file2');
         const reconcileBtn = document.getElementById('reconcileBtn');
@@ -1168,8 +1314,56 @@
         downloadBtn.addEventListener('click', downloadReport);
 
         // Auto-fetch File 1 on page load
-        window.addEventListener('DOMContentLoaded', () => fetchFromDrive());
-        if (document.readyState !== 'loading') fetchFromDrive();
+        window.addEventListener('DOMContentLoaded', () => {
+            fetchFromDrive();
+            setupDragDrop();
+        });
+        if (document.readyState !== 'loading') {
+            fetchFromDrive();
+            setupDragDrop();
+        }
+
+        // ============================================================
+        // DRAG AND DROP
+        // ============================================================
+        function setupDragDrop() {
+            const card2 = document.getElementById('upload2');
+            ['dragenter', 'dragover'].forEach(evt => {
+                card2.addEventListener(evt, e => { e.preventDefault(); card2.classList.add('drag-over'); });
+            });
+            ['dragleave', 'drop'].forEach(evt => {
+                card2.addEventListener(evt, e => { e.preventDefault(); card2.classList.remove('drag-over'); });
+            });
+            card2.addEventListener('drop', e => {
+                const file = e.dataTransfer.files[0];
+                if (file) {
+                    const fakeEvent = { target: { files: [file] } };
+                    handleFileUpload(fakeEvent, 2);
+                }
+            });
+        }
+
+        // ============================================================
+        // RESET — load new payroll without page refresh
+        // ============================================================
+        function resetApp() {
+            file2Data = null;
+            reconciliationResults = null;
+            activeFilter = 'all';
+
+            const upload2 = document.getElementById('upload2');
+            upload2.classList.remove('has-file');
+            document.getElementById('file2-name').textContent = '';
+            document.getElementById('file2').value = '';
+
+            resultsDiv.classList.remove('show');
+            downloadBtn.style.display = 'none';
+            document.getElementById('resetBtn').style.display = 'none';
+            reconcileBtn.disabled = true;
+
+            // Scroll back to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
 
         // ============================================================
         // CSV PARSER (handles quoted fields, commas inside quotes, etc.)
@@ -1280,7 +1474,6 @@
 
             // Try Strategy 1: Published CSV export
             try {
-                console.log('Trying CSV export...');
                 const csvUrl = `https://docs.google.com/spreadsheets/d/e/${FILE1_PUB_KEY}/pub?output=csv&cachebust=${Date.now()}`;
                 const response = await fetch(csvUrl);
 
@@ -1293,9 +1486,7 @@
                         return;
                     }
                 }
-                console.log('CSV export failed, trying JSONP...');
             } catch (e) {
-                console.log('CSV export error:', e.message, '— trying JSONP...');
             }
 
             // Try Strategy 2: JSONP via gviz
@@ -1398,9 +1589,6 @@
 
             reconcileBtn.disabled = !(file1Data && file2Data);
 
-            console.log('File 1 loaded:', normalizedData.length, 'rows');
-            console.log('Headers:', Object.keys(normalizedData[0]));
-            console.log('Sample:', normalizedData[0]);
         }
 
         // ============================================================
@@ -1719,8 +1907,6 @@
             // Use "Customer" column for payment amount if available, otherwise fall back to "Owed"
             const amountCol = customerAmtCol || owedCol;
 
-            console.log('File 2 payment column:', customerAmtCol ? `"Customer" (${customerAmtCol})` : `"Owed" fallback (${owedCol})`);
-            console.log('File 2 payout column:', owedCol);
 
             for (const row of data) {
                 const rowDate = dateCol ? row[dateCol] : null;
@@ -1752,11 +1938,23 @@
                     const dateKey = d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : 'nodate';
                     const key = `${currentCustomer}_${dateKey}`;
 
+                    const paymentAmt = parseFloat(row[amountCol]) || 0;
+                    const payoutAmt = Math.abs(parseFloat(row[owedCol]) || 0);
+
+                    // Skip pure refund entries (negative customer total, no fees owed)
+                    // These are administrative reversals, not real service visits
+                    const feesAmt = feesCol ? (parseFloat(row[feesCol]) || 0) : 0;
+                    if (paymentAmt < 0 && feesAmt === 0 && currentServices.length === 0) {
+                        currentCustomer = null;
+                        currentServices = [];
+                        continue;
+                    }
+
                     entries[key] = {
                         customer: currentCustomer,
                         date: d,
-                        payment: parseFloat(row[amountCol]) || 0,
-                        payout: Math.abs(parseFloat(row[owedCol]) || 0),
+                        payment: paymentAmt,
+                        payout: payoutAmt,
                         services: [...currentServices]
                     };
 
@@ -1773,6 +1971,7 @@
         // ============================================================
         function runReconciliation() {
             loadingDiv.classList.add('show');
+            loadingDiv.innerHTML = '<div class="spinner"></div><p>Processing files...</p>';
             resultsDiv.classList.remove('show');
             downloadBtn.style.display = 'none';
 
@@ -1790,12 +1989,9 @@
                     const chargesCol2 = findChargesColumn(file2Data);
                     const feesCol2 = findFeesColumn(file2Data);
 
-                    console.log('File 1 cols:', { customerCol1, owedCol1, dateCol1, servicesCol1 });
-                    console.log('File 2 cols:', { customerCol2, owedCol2, methodCol2, dateCol2, chargesCol2, feesCol2 });
 
                     // Get date range from File 2 (using robust parseDate)
                     const dateRange = getDateRange(file2Data, dateCol2);
-                    console.log('Date range:', dateRange);
 
                     const hasDateRange = dateRange.min && dateRange.max;
 
@@ -1824,8 +2020,6 @@
                     // Extract File 2 visits (composite key: customer+date)
                     const f2Entries = extractFile2Totals(file2Data, customerCol2, owedCol2, methodCol2, dateCol2, chargesCol2, feesCol2);
 
-                    console.log('File 1 visits (filtered):', Object.keys(f1Filtered).length);
-                    console.log('File 2 visits:', Object.keys(f2Entries).length);
 
                     // Build lookup: for F2 entries without exact date match in F1,
                     // try matching by customer number alone (date may differ slightly)
@@ -2083,8 +2277,13 @@
                     displayResults();
 
                 } catch (error) {
-                    alert('Error processing files: ' + error.message);
-                    console.error(error);
+                    loadingDiv.classList.remove('show');
+                    loadingDiv.innerHTML = `<div style="color: var(--error); padding: 24px; text-align: center;">
+                        <p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 8px;">⚠️ Error processing files</p>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem;">${error.message}</p>
+                        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 8px;">Make sure both files are valid and contain the expected columns.</p>
+                    </div>`;
+                    loadingDiv.classList.add('show');
                 }
 
                 loadingDiv.classList.remove('show');
@@ -2211,9 +2410,20 @@
             const tbody = document.getElementById('reconTableBody');
             tbody.innerHTML = '';
 
-            const matchedRows = r.details.filter(row =>
+            let matchedRows = r.details.filter(row =>
                 !row.paymentStatus.includes('NOT FOUND')
             );
+
+            // Apply active filter
+            if (activeFilter === 'mismatch') {
+                matchedRows = matchedRows.filter(row =>
+                    row.paymentStatus === 'MISMATCH' || row.payoutStatus === 'MISMATCH'
+                );
+            } else if (activeFilter === 'ok') {
+                matchedRows = matchedRows.filter(row =>
+                    row.paymentStatus === 'MATCH' && (row.payoutStatus === 'MATCH' || row.payoutStatus === '-')
+                );
+            }
 
             let groupIndex = 0;
 
@@ -2341,6 +2551,17 @@
         }
 
         // ============================================================
+        // FILTER TABS
+        // ============================================================
+        function setFilter(filter, rerender = true) {
+            activeFilter = filter;
+            document.querySelectorAll('.filter-tab').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.filter === filter);
+            });
+            if (rerender) renderUnifiedTable();
+        }
+
+        // ============================================================
         // SEARCH / FILTER
         // ============================================================
         function filterTable() {
@@ -2412,8 +2633,41 @@
             document.getElementById('payoutMatchesCount').textContent = r.payoutMatches;
             document.getElementById('payoutMismatchesCount').textContent = r.payoutMismatches;
 
+            // Discrepancy banner
+            let totalPaymentDisc = 0, totalPayoutDisc = 0;
+            let mismatchCount = 0;
+            for (const row of r.details) {
+                if (row.paymentStatus === 'MISMATCH' && row.paymentDiff !== null) {
+                    totalPaymentDisc += row.paymentDiff;
+                    mismatchCount++;
+                }
+                if (row.payoutStatus === 'MISMATCH' && row.payoutDiff !== null) {
+                    totalPayoutDisc += row.payoutDiff;
+                }
+            }
+            const totalDisc = totalPaymentDisc + totalPayoutDisc;
+            const fmtDisc = (v) => (v < 0 ? '-$' : v > 0 ? '+$' : '$') + Math.abs(v).toFixed(2);
+            const discClass = (v) => v < 0 ? 'negative' : v > 0 ? 'positive' : 'neutral';
+
+            document.getElementById('discPayment').textContent = fmtDisc(totalPaymentDisc);
+            document.getElementById('discPayment').className = 'disc-value ' + discClass(totalPaymentDisc);
+            document.getElementById('discPayout').textContent = fmtDisc(totalPayoutDisc);
+            document.getElementById('discPayout').className = 'disc-value ' + discClass(totalPayoutDisc);
+            document.getElementById('discTotal').textContent = fmtDisc(totalDisc);
+            document.getElementById('discTotal').className = 'disc-value ' + discClass(totalDisc);
+            document.getElementById('discMismatchCount').textContent = mismatchCount;
+
+            // Filter tab counts
+            const allMatched = r.details.filter(row => !row.paymentStatus.includes('NOT FOUND'));
+            const mismatchRows = allMatched.filter(row => row.paymentStatus === 'MISMATCH' || row.payoutStatus === 'MISMATCH');
+            const okRows = allMatched.filter(row => row.paymentStatus === 'MATCH' && (row.payoutStatus === 'MATCH' || row.payoutStatus === '-'));
+            const notFoundRows = r.details.filter(row => row.paymentStatus.includes('NOT FOUND'));
+            document.getElementById('tabCountAll').textContent = allMatched.length;
+            document.getElementById('tabCountMismatch').textContent = mismatchRows.length;
+            document.getElementById('tabCountOk').textContent = okRows.length;
+            document.getElementById('tabCountNotFound').textContent = notFoundRows.length;
+
             // Sort: mismatches first, then not found, then matches
-            // Priority: any mismatch (payment or payout) → not found → all match
             r.details.sort((a, b) => {
                 function score(row) {
                     if (row.paymentStatus === 'MISMATCH' || row.payoutStatus === 'MISMATCH') return 0;
@@ -2462,12 +2716,15 @@
                 serviceSummaryDiv.style.display = 'none';
             }
 
+            activeFilter = 'all';
+            setFilter('all', false);
             currentSort = { column: null, direction: 'asc' };
             renderUnifiedTable();
             renderOrphanCards();
 
             resultsDiv.classList.add('show');
             downloadBtn.style.display = 'inline-flex';
+            document.getElementById('resetBtn').style.display = 'inline-flex';
         }
 
         // ============================================================
