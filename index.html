@@ -1840,7 +1840,7 @@
             return letter;
         }
 
-        async function findSheetRow(customerCode, serviceDateStr) {
+        async function findSheetRow(customerCode, serviceDateStr, transactionId) {
             const dateKey = serviceDateStr; // already YYYY-MM-DD string
             const resp = await fetch(
                 `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(SHEET_NAME)}`,
@@ -1848,21 +1848,17 @@
             );
 
             if (resp.status === 401) {
-                googleAccessToken = null; // force re-auth
+                googleAccessToken = null;
                 setAuthState('disconnected');
                 throw new Error('SESSION_EXPIRED');
             }
-            if (resp.status === 403) {
-                throw new Error('NO_ACCESS');
-            }
-            if (!resp.ok) {
-                throw new Error(`SHEETS_ERROR:${resp.status}`);
-            }
+            if (resp.status === 403) throw new Error('NO_ACCESS');
+            if (!resp.ok) throw new Error(`SHEETS_ERROR:${resp.status}`);
 
             const data = await resp.json();
             const rows = data.values || [];
 
-            // Find header row to get column indices
+            // Find header row
             let headerIdx = -1;
             for (let i = 0; i < Math.min(10, rows.length); i++) {
                 if (rows[i].some(c => c && (c.includes('Customer No') || c.includes('Customer Code')))) {
@@ -1873,27 +1869,42 @@
             if (headerIdx === -1) throw new Error('HEADER_NOT_FOUND');
 
             const headers = rows[headerIdx];
-            const custColIdx = headers.findIndex(h => h && (h.includes('Customer No') || h.includes('Customer Code')));
-            const dateColIdx = headers.findIndex(h => h && h.toLowerCase().includes('date'));
-            const svcColIdx = headers.findIndex(h => h && h.toLowerCase().includes('services'));
-            const reconColIdx = headers.findIndex(h => h && h.includes('Missed Service Reconciliated'));
+            const custColIdx   = headers.findIndex(h => h && (h.includes('Customer No') || h.includes('Customer Code')));
+            const dateColIdx   = headers.findIndex(h => h && h.toLowerCase().includes('date'));
+            const svcColIdx    = headers.findIndex(h => h && h.toLowerCase().includes('services'));
+            const reconColIdx  = headers.findIndex(h => h && h.includes('Missed Service Reconciliated'));
+            const txIdColIdx   = headers.findIndex(h => h && /^transaction\s*id$/i.test(h.trim()));
 
             if (custColIdx === -1) throw new Error('HEADER_NOT_FOUND');
             if (reconColIdx === -1) throw new Error('RECON_COL_NOT_FOUND');
 
-            // Search data rows for matching customer + date
+            const reconColLetter = colIndexToLetter(reconColIdx);
+
+            // Strategy 1: match by Transaction ID (fast, unambiguous)
+            if (transactionId && txIdColIdx !== -1) {
+                for (let i = headerIdx + 1; i < rows.length; i++) {
+                    const row = rows[i];
+                    const rowTxId = row[txIdColIdx] ? String(row[txIdColIdx]).trim() : '';
+                    if (rowTxId === String(transactionId).trim()) {
+                        return { rowNumber: i + 1, reconColIdx, reconColLetter };
+                    }
+                }
+            }
+
+            // Strategy 2: fallback — match by customer + date + missed service type
             for (let i = headerIdx + 1; i < rows.length; i++) {
                 const row = rows[i];
                 const rowCust = row[custColIdx] ? String(Math.floor(Number(row[custColIdx]))) : '';
                 const rowDate = row[dateColIdx] ? formatDate(parseDate(row[dateColIdx])) : '';
-                const rowSvc = row[svcColIdx] ? String(row[svcColIdx]).toLowerCase() : '';
+                const rowSvc  = row[svcColIdx]  ? String(row[svcColIdx]).toLowerCase() : '';
 
                 if (rowCust === String(customerCode) &&
                     rowDate === dateKey &&
                     rowSvc.startsWith('missed')) {
-                    return { rowNumber: i + 1, reconColIdx, reconColLetter: colIndexToLetter(reconColIdx) };
+                    return { rowNumber: i + 1, reconColIdx, reconColLetter };
                 }
             }
+
             return null;
         }
 
@@ -1945,7 +1956,7 @@
             return { text: 'Something went wrong: ' + msg, action: null };
         }
 
-        async function markAsReconciled(btn, customerCode, serviceDateStr) {
+        async function markAsReconciled(btn, customerCode, serviceDateStr, transactionId) {
             if (!isGoogleAuthed()) {
                 showToast('Sign in with Google first to enable write-back', 'error');
                 return;
@@ -1956,7 +1967,7 @@
             btn.textContent = 'Saving...';
 
             try {
-                const match = await findSheetRow(customerCode, serviceDateStr);
+                const match = await findSheetRow(customerCode, serviceDateStr, transactionId || null);
                 if (!match) {
                     throw new Error(`Row not found for customer ${customerCode} on ${serviceDateStr}`);
                 }
@@ -1991,8 +2002,8 @@
 
                 // Mark in memory so re-renders stay correct
                 const missedRow = reconciliationResults.missedResults.find(r =>
-                    r.customerCode === customerCode &&
-                    formatDate(r.serviceDate) === serviceDateStr
+                    (transactionId && r.transactionId && String(r.transactionId) === String(transactionId)) ||
+                    (r.customerCode === customerCode && formatDate(r.serviceDate) === serviceDateStr)
                 );
                 if (missedRow) missedRow.reconciled = true;
 
@@ -2558,6 +2569,8 @@
             const proofCol = findColumnByPattern(data, /proof.*payment/i);
             // Find "Missed Service Reconciliated?" column
             const reconCol = findColumnByPattern(data, /missed.*reconcili/i);
+            // Find "Transaction ID" column
+            const txIdCol = findColumnByPattern(data, /^transaction\s*id$/i);
 
             for (const row of data) {
                 const custRaw = row[customerCol];
@@ -2572,18 +2585,21 @@
                 const key = `${cust}_${dateKey}`;
 
                 const proofUrl = proofCol ? (row[proofCol] || null) : null;
+                const transactionId = txIdCol ? (row[txIdCol] || null) : null;
 
                 if (entries[key]) {
                     // Same customer, same date — sum the amounts
                     entries[key].owed += parseFloat(row[owedCol]) || 0;
                     if (proofUrl && !entries[key].proofUrl) entries[key].proofUrl = proofUrl;
+                    if (transactionId && !entries[key].transactionId) entries[key].transactionId = transactionId;
                 } else {
                     entries[key] = {
                         customer: cust,
                         date: d,
                         owed: parseFloat(row[owedCol]) || 0,
                         service: servicesCol ? (row[servicesCol] || '') : '',
-                        proofUrl: proofUrl
+                        proofUrl: proofUrl,
+                        transactionId: transactionId
                     };
                 }
             }
@@ -2851,6 +2867,7 @@
                         missedResults.push({
                             serviceDate: f1 ? f1.date : f2.date,
                             customerCode: f1 ? f1.customer : f2.customer,
+                            transactionId: f1 ? (f1.transactionId || null) : null,
                             servicesDisplay: formatServices(servicesList) || (f1 ? f1.service : '-'),
                             sscPayout: f2.payout,
                             expectedPayout,
@@ -2883,6 +2900,7 @@
                         missedResults.push({
                             serviceDate: entry.date,
                             customerCode: entry.customer,
+                            transactionId: entry.transactionId || null,
                             servicesDisplay: entry.service || 'Missed',
                             sscPayout: undefined,
                             expectedPayout,
@@ -3437,7 +3455,7 @@
                         const authed = isGoogleAuthed();
                         const dateStr = formatDate(row.serviceDate);
                         actionCell = authed
-                            ? `<button class="btn-reconcile" onclick="markAsReconciled(this, ${row.customerCode}, '${dateStr}')">✓ Mark Reconciled</button>`
+                            ? `<button class="btn-reconcile" onclick="markAsReconciled(this, ${row.customerCode}, '${dateStr}', ${JSON.stringify(row.transactionId || null)})">✓ Mark Reconciled</button>`
                             : `<button class="btn-reconcile" disabled title="Sign in with Google to enable this">✓ Mark Reconciled</button>`;
                     } else {
                         actionCell = '<span style="color:var(--text-secondary);font-size:0.75rem;">—</span>';
@@ -3663,7 +3681,7 @@
                     const actionCell = row.reconciled
                         ? '<span class="reconciled-badge">✓ Reconciled</span>'
                         : authed
-                            ? `<button class="btn-reconcile" onclick="markAsReconciled(this, ${row.customerCode}, '${dateStr}')">✓ Mark Reconciled</button>`
+                            ? `<button class="btn-reconcile" onclick="markAsReconciled(this, ${row.customerCode}, '${dateStr}', ${JSON.stringify(row.transactionId || null)})">✓ Mark Reconciled</button>`
                             : `<button class="btn-reconcile" disabled title="Sign in with Google to enable this">✓ Mark Reconciled</button>`;
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
