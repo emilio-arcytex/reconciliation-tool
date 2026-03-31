@@ -3569,32 +3569,33 @@
 
                     const authed = isGoogleAuthed();
                     const dateStr = formatDate(row.serviceDate);
-                    const txIdJson = JSON.stringify(row.transactionId || null);
+                    const ownTxId = row.transactionId ? String(row.transactionId) : null;
 
-                    // Action cell logic
+                    // Build options excluding this row's own transaction ID
+                    const rowOptionsHTML = `<option value="">Select transaction...</option>` +
+                        txOptions
+                            .filter(o => o.txId !== ownTxId)
+                            .map(o => `<option value="${o.txId}">${o.label}</option>`)
+                            .join('');
+
+                    // Action cell
                     let actionCell;
                     if (row.reconciled) {
                         const linked = row.linkedTxId ? ` #${row.linkedTxId}` : '';
                         actionCell = `<span class="reconciled-row-badge">✓ Reconciled${linked}</span>`;
                     } else if (row.missedStatus === 'SSC_ONLY' || row.missedStatus === 'CRITICAL') {
-                        // Both SSC_ONLY and CRITICAL need a link dropdown:
-                        // SSC_ONLY = SSC has it, we don't → link to our record
-                        // CRITICAL = we have it, SSC hasn't paid → link to our record and mark done once chased
+                        const linkLabel = row.missedStatus === 'CRITICAL' ? 'Link & Reconcile' : 'Link';
                         if (authed) {
-                            const linkLabel = row.missedStatus === 'CRITICAL' ? 'Link & Reconcile' : 'Link';
                             actionCell = `<div class="link-dropdown-wrap">
-                                <select class="link-select" id="lnk-${row.customerCode}-${dateStr}">${optionsHTML}</select>
-                                <button class="btn-link-confirm" onclick="linkMissedTransaction(
-                                    document.getElementById('lnk-${row.customerCode}-${dateStr}'),
-                                    this, ${row.customerCode}, '${dateStr}', ${txIdJson}
-                                )">${linkLabel}</button>
+                                <select class="link-select">${rowOptionsHTML}</select>
+                                <button class="btn-link-confirm">${linkLabel}</button>
                             </div>`;
                         } else {
                             actionCell = `<button class="btn-reconcile" disabled title="Sign in with Google to enable this">Link Record</button>`;
                         }
                     } else if (row.missedStatus === 'MATCHED') {
                         actionCell = authed
-                            ? `<button class="btn-reconcile" onclick="markAsReconciled(this, ${row.customerCode}, '${dateStr}', ${txIdJson})">✓ Mark Reconciled</button>`
+                            ? `<button class="btn-reconcile" data-cust="${row.customerCode}" data-date="${dateStr}" data-txid="${ownTxId || ''}">✓ Mark Reconciled</button>`
                             : `<button class="btn-reconcile" disabled title="Sign in with Google to enable this">✓ Mark Reconciled</button>`;
                     } else {
                         actionCell = '<span style="color:var(--text-secondary);font-size:0.75rem;">—</span>';
@@ -3612,6 +3613,27 @@
                         <td>${missedBadge}</td>
                         <td>${actionCell}</td>
                     `;
+
+                    // Wire up buttons via event listeners after DOM insertion
+                    const linkBtn = tr.querySelector('.btn-link-confirm');
+                    if (linkBtn) {
+                        const custCode = row.customerCode;
+                        const txId = row.transactionId || null;
+                        linkBtn.addEventListener('click', function() {
+                            const sel = this.closest('.link-dropdown-wrap').querySelector('.link-select');
+                            linkMissedTransaction(sel, this, custCode, dateStr, txId);
+                        });
+                    }
+                    const reconBtn = tr.querySelector('.btn-reconcile[data-cust]');
+                    if (reconBtn) {
+                        reconBtn.addEventListener('click', function() {
+                            const c = parseInt(this.dataset.cust);
+                            const d = this.dataset.date;
+                            const t = this.dataset.txid || null;
+                            markAsReconciled(this, c, d, t);
+                        });
+                    }
+
                     bodyMissed.appendChild(tr);
                 }
             } else {
@@ -3839,7 +3861,14 @@
                 for (const row of criticalRows) {
                     const authed = isGoogleAuthed();
                     const dateStr = formatDate(row.serviceDate);
-                    const txIdJson = JSON.stringify(row.transactionId || null);
+                    const ownTxId = row.transactionId ? String(row.transactionId) : null;
+
+                    // Build options excluding this row's own ID
+                    const criticalRowOptionsHTML = `<option value="">Select transaction...</option>` +
+                        criticalTxOptions
+                            .filter(o => o.txId !== ownTxId)
+                            .map(o => `<option value="${o.txId}">${o.label}</option>`)
+                            .join('');
 
                     let actionCell;
                     if (row.reconciled) {
@@ -3847,11 +3876,8 @@
                         actionCell = `<span class="reconciled-row-badge">✓ Reconciled${linked}</span>`;
                     } else if (authed) {
                         actionCell = `<div class="link-dropdown-wrap">
-                            <select class="link-select" id="clnk-${row.customerCode}-${dateStr}">${criticalOptionsHTML}</select>
-                            <button class="btn-link-confirm" onclick="linkMissedTransaction(
-                                document.getElementById('clnk-${row.customerCode}-${dateStr}'),
-                                this, ${row.customerCode}, '${dateStr}', ${txIdJson}
-                            )">Link & Reconcile</button>
+                            <select class="link-select">${criticalRowOptionsHTML}</select>
+                            <button class="btn-link-confirm">Link & Reconcile</button>
                         </div>`;
                     } else {
                         actionCell = `<button class="btn-reconcile" disabled title="Sign in with Google to enable this">Link Record</button>`;
@@ -3865,6 +3891,18 @@
                         <td style="color: var(--error); font-weight: 600;">$${(row.expectedPayout || 0).toFixed(2)}</td>
                         <td>${actionCell}</td>
                     `;
+
+                    // Wire up via event listener
+                    const linkBtn = tr.querySelector('.btn-link-confirm');
+                    if (linkBtn) {
+                        const custCode = row.customerCode;
+                        const txId = row.transactionId || null;
+                        linkBtn.addEventListener('click', function() {
+                            const sel = this.closest('.link-dropdown-wrap').querySelector('.link-select');
+                            linkMissedTransaction(sel, this, custCode, dateStr, txId);
+                        });
+                    }
+
                     criticalBody.appendChild(tr);
                 }
             } else {
