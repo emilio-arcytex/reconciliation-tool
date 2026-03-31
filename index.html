@@ -2165,51 +2165,102 @@
                 Refreshing...
             `;
 
-            // Clear cached data
             file1Data = null;
             sheetHeaders = null;
 
-            // Re-fetch from Drive
             const fetchBtn = document.getElementById('fetchBtn');
             const fileName = document.getElementById('file1-name');
-            fetchBtn.classList.add('loading');
 
+            const finish = (success, msg) => {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+                fetchBtn.classList.remove('loading');
+                showToast(msg, success ? 'success' : 'error');
+                if (success && reconciliationResults && file2Data) {
+                    setTimeout(() => runReconciliation(), 400);
+                }
+            };
+
+            // ── Strategy 1: Sheets API (live, no cache) — requires sign-in ──
+            if (isGoogleAuthed()) {
+                try {
+                    const resp = await fetch(
+                        `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(SHEET_NAME)}`,
+                        { headers: { Authorization: `Bearer ${googleAccessToken}` } }
+                    );
+                    if (resp.status === 401) { googleAccessToken = null; setAuthState('disconnected'); throw new Error('SESSION_EXPIRED'); }
+                    if (resp.status === 403) throw new Error('NO_ACCESS');
+                    if (!resp.ok) throw new Error(`SHEETS_ERROR:${resp.status}`);
+
+                    const data = await resp.json();
+                    const rows = data.values || [];
+
+                    // Find header row
+                    let headerIdx = 0;
+                    for (let i = 0; i < Math.min(10, rows.length); i++) {
+                        if (rows[i].some(c => c && (c.includes('Customer No') || c.includes('Customer Code')))) {
+                            headerIdx = i; break;
+                        }
+                    }
+
+                    const headers = rows[headerIdx];
+                    const dataRows = rows.slice(headerIdx + 1);
+                    const normalized = dataRows.map(row => {
+                        const obj = {};
+                        headers.forEach((col, idx) => {
+                            if (col && col.trim()) {
+                                let val = row[idx] !== undefined ? row[idx] : null;
+                                const colName = col.trim();
+                                if (val !== null && val !== '' && !colName.toLowerCase().includes('date') &&
+                                    !isNaN(Number(val)) && Number(val) !== 0) {
+                                    val = Number(val);
+                                } else if (val === '') {
+                                    val = null;
+                                }
+                                obj[colName] = val;
+                            }
+                        });
+                        return obj;
+                    }).filter(row => Object.values(row).some(v => v !== null && v !== undefined));
+
+                    onFetchSuccess(normalized, fetchBtn, fileName);
+                    finish(true, 'Live data loaded from Google Sheets ✓');
+                    return;
+                } catch (e) {
+                    const msg = e.message;
+                    if (msg === 'SESSION_EXPIRED') {
+                        finish(false, 'Session expired — please sign in again');
+                        setTimeout(handleGoogleSignIn, 1000);
+                        return;
+                    }
+                    if (msg === 'NO_ACCESS') {
+                        finish(false, 'Access denied — make sure you\'re signed in with the right account');
+                        return;
+                    }
+                    // Any other API error — fall through to CSV
+                }
+            }
+
+            // ── Strategy 2: Published CSV (cached ~5-10 min by Google) ──
             try {
-                // Try CSV first
                 const csvUrl = `https://docs.google.com/spreadsheets/d/e/${FILE1_PUB_KEY}/pub?output=csv&cachebust=${Date.now()}`;
-                const response = await fetch(csvUrl);
+                const response = await fetch(csvUrl, { cache: 'no-store' });
                 if (response.ok) {
                     const csvText = await response.text();
                     if (csvText && csvText.length > 50 && !csvText.includes('<!DOCTYPE')) {
                         const rows = parseCSV(csvText);
                         const normalizedData = csvToNormalizedData(rows);
                         onFetchSuccess(normalizedData, fetchBtn, fileName);
-                        btn.disabled = false;
-                        btn.innerHTML = originalHTML;
-                        showToast('Data refreshed from Google Sheets ✓', 'success');
-                        // If results already showing, re-run reconciliation automatically
-                        if (reconciliationResults && file2Data) {
-                            showToast('Data refreshed — re-running reconciliation...', 'success');
-                            setTimeout(() => runReconciliation(), 400);
-                        }
+                        finish(true, 'Data refreshed ✓ — sign in with Google for instant live updates (CSV may lag 5–10 min)');
                         return;
                     }
                 }
                 // Fallback to JSONP
                 const data = await fetchViaJSONP();
                 onFetchSuccess(data, fetchBtn, fileName);
-                btn.disabled = false;
-                btn.innerHTML = originalHTML;
-                showToast('Data refreshed from Google Sheets ✓', 'success');
-                if (reconciliationResults && file2Data) {
-                    showToast('Data refreshed — re-running reconciliation...', 'success');
-                    setTimeout(() => runReconciliation(), 400);
-                }
+                finish(true, 'Data refreshed ✓ — sign in with Google for instant live updates');
             } catch (e) {
-                btn.disabled = false;
-                btn.innerHTML = originalHTML;
-                fetchBtn.classList.remove('loading');
-                showToast('Could not refresh — check your connection and sheet permissions', 'error');
+                finish(false, 'Could not refresh — check your connection and sheet is published to web');
             }
         }
         function resetApp() {
