@@ -2855,10 +2855,15 @@
                     }
 
                     // Split F1 into missed and normal
+                    // Reconciled missed rows are excluded entirely — they're settled
                     const f1Missed = {}, f1Normal = {};
                     for (const [key, entry] of Object.entries(f1Filtered)) {
-                        if (isMissedF1(entry)) f1Missed[key] = entry;
-                        else f1Normal[key] = entry;
+                        if (isMissedF1(entry)) {
+                            if (!entry.reconciled) f1Missed[key] = entry;
+                            // reconciled missed rows are silently dropped — already settled
+                        } else {
+                            f1Normal[key] = entry;
+                        }
                     }
 
                     // Split F2 into missed and normal
@@ -4262,6 +4267,34 @@
                         String(r.customerCode) === String(customerCode) && r.missedStatus === 'CRITICAL'
                     );
                     if (fallback) { fallback.reconciled = true; fallback.linkedTxId = selectedTxId; }
+                }
+
+                // Also update file1Data cache so next reconciliation run respects the reconciled state
+                // without needing a full re-fetch from Google Sheets
+                if (file1Data) {
+                    const reconColKey = Object.keys(file1Data[0] || {}).find(k => /missed.*reconcili/i.test(k));
+                    const txIdColKey  = Object.keys(file1Data[0] || {}).find(k => /transaction.*id/i.test(k));
+                    const custColKey  = Object.keys(file1Data[0] || {}).find(k => k.includes('Customer No') || k.includes('Customer Code'));
+                    const dateColKey  = Object.keys(file1Data[0] || {}).find(k => k.toLowerCase().includes('date'));
+                    const svcColKey   = Object.keys(file1Data[0] || {}).find(k => k.toLowerCase().includes('services'));
+
+                    if (reconColKey) {
+                        for (const row of file1Data) {
+                            const rowTxId  = txIdColKey  ? String(row[txIdColKey]  || '').trim() : '';
+                            const rowCust  = custColKey  ? String(Math.floor(Number(row[custColKey] || 0))) : '';
+                            const rowDate  = dateColKey  ? formatDate(parseDate(row[dateColKey])) : '';
+                            const rowSvc   = svcColKey   ? String(row[svcColKey] || '').toLowerCase() : '';
+                            const isMissed = rowSvc.startsWith('missed');
+
+                            const matchById   = transactionId && rowTxId && rowTxId === String(transactionId).trim();
+                            const matchByCust = rowCust === String(customerCode) && rowDate === serviceDateStr && isMissed;
+
+                            if (matchById || matchByCust) {
+                                row[reconColKey] = 'YES';
+                                break;
+                            }
+                        }
+                    }
                 }
 
                 sheetHeaders = null;
