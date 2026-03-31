@@ -1390,7 +1390,7 @@
         <div class="google-auth-bar" id="googleAuthBar">
             <div class="auth-status">
                 <div class="auth-dot" id="authDot"></div>
-                <span id="authStatusText">Not connected — sign in to enable write-back to Google Sheets</span>
+                <span id="authStatusText">Sign in with Google below to mark missed appointments as reconciled — required before using that feature</span>
             </div>
             <button class="btn-google" id="googleSignInBtn" onclick="handleGoogleSignIn()">
                 <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
@@ -1790,7 +1790,7 @@
                 text.textContent = 'Connecting...';
                 signInBtn.disabled = true;
             } else {
-                text.textContent = 'Not connected — sign in to mark missed appointments as reconciled';
+                text.textContent = 'Not connected — sign in with Google to mark missed appointments as reconciled';
                 signInBtn.style.display = 'inline-flex';
                 signInBtn.disabled = false;
                 signOutBtn.style.display = 'none';
@@ -1829,6 +1829,17 @@
         // SHEETS API — find the row number for a customer+date in File 1
         // Returns 1-based row index, or -1 if not found
         // ============================================================
+        function colIndexToLetter(idx) {
+            let letter = '';
+            idx++; // convert to 1-based
+            while (idx > 0) {
+                const rem = (idx - 1) % 26;
+                letter = String.fromCharCode(65 + rem) + letter;
+                idx = Math.floor((idx - 1) / 26);
+            }
+            return letter;
+        }
+
         async function findSheetRow(customerCode, serviceDateStr) {
             const dateKey = serviceDateStr; // already YYYY-MM-DD string
             const resp = await fetch(
@@ -3829,6 +3840,18 @@
                         td.innerHTML = '<span style="color:var(--text-secondary);opacity:0.4;">—</span>';
                     } else if (val instanceof Date) {
                         td.textContent = formatDate(val);
+                    } else if (col.toLowerCase().includes('proof')) {
+                        // Proof of payment — show a button instead of raw URL
+                        const url = String(val).trim();
+                        if (url && url.startsWith('http')) {
+                            td.innerHTML = `<a href="${url}" target="_blank" rel="noopener" class="proof-icon" title="View proof of payment">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                                </svg>
+                            </a>`;
+                        } else {
+                            td.innerHTML = '<span style="color:var(--text-secondary);opacity:0.4;">—</span>';
+                        }
                     } else if (col.toLowerCase().includes('reconcili') && String(val).toUpperCase() === 'YES') {
                         td.innerHTML = '<span class="tx-yes-badge">✓ YES</span>';
                     } else if (col.toLowerCase().includes('services') || col.toLowerCase().includes('service')) {
