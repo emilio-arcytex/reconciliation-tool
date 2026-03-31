@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Durham Autohaus - Transaction Reconciliation</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         * {
@@ -1023,14 +1024,385 @@
             background: var(--border-color);
             color: var(--text-primary);
         }
+        /* Reconcile notification toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            max-width: 380px;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            line-height: 1.5;
+            color: white;
+            z-index: 9999;
+            transform: translateY(80px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast.success { background: #166534; }
+        .toast.error { background: #991b1b; }
+
+        /* Google OAuth bar */
+        .google-auth-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 20px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .auth-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        .auth-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--border-color);
+            flex-shrink: 0;
+            transition: background 0.3s;
+        }
+        .auth-dot.connected { background: var(--success); }
+        .auth-dot.connecting { background: var(--warning); animation: auth-pulse 1s infinite; }
+        @keyframes auth-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+        .btn-google {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: white;
+            color: #3c4043;
+            border: 1px solid #dadce0;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-google:hover { background: #f8f9fa; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+        .btn-google:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Mark reconciled button */
+        .btn-reconcile {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .btn-reconcile:hover:not(:disabled) {
+            background: var(--success-bg);
+            color: var(--success);
+            border-color: var(--success);
+        }
+        .btn-reconcile:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-reconcile.loading { opacity: 0.6; cursor: wait; }
+        .reconciled-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            background: var(--success-bg);
+            color: var(--success);
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        /* Critical unpaid missed appointments banner */
+        .critical-banner {
+            display: none;
+            background: var(--error-bg);
+            border: 2px solid var(--error);
+            border-radius: 14px;
+            padding: 20px 24px;
+            margin-bottom: 24px;
+            animation: criticalPulse 2s ease-in-out 3;
+        }
+
+        @keyframes criticalPulse {
+            0%, 100% { border-color: var(--error); }
+            50% { border-color: #ff6b6b; box-shadow: 0 0 16px rgba(239,68,68,0.3); }
+        }
+
+        .critical-banner.show { display: block; }
+
+        .critical-banner-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .critical-icon {
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .critical-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--error);
+            margin: 0;
+        }
+
+        .critical-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin: 2px 0 0 0;
+        }
+
+        .critical-count {
+            margin-left: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--error);
+        }
+
+        .critical-table-wrap {
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid rgba(239,68,68,0.3);
+        }
+
+        .critical-table-wrap table { width: 100%; border-collapse: collapse; }
+        .critical-table-wrap th {
+            background: rgba(239,68,68,0.15);
+            color: var(--error);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 10px 14px;
+            text-align: left;
+            font-weight: 600;
+        }
+        .critical-table-wrap td {
+            padding: 10px 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            border-top: 1px solid rgba(239,68,68,0.15);
+        }
+        .critical-table-wrap tr:hover td { background: rgba(239,68,68,0.05); }
+
+        /* ============================================================
+           TRANSACTIONS VIEWER PANEL
+        ============================================================ */
+        .tx-panel {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            background: var(--bg-primary);
+            display: flex;
+            flex-direction: column;
+            transform: translateX(100%);
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .tx-panel.open { transform: translateX(0); }
+
+        .tx-panel-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 20px 28px;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            flex-shrink: 0;
+        }
+
+        .tx-panel-title {
+            flex: 1;
+        }
+
+        .tx-panel-title h2 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .tx-panel-title p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin: 3px 0 0 0;
+        }
+
+        .tx-panel-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .tx-search {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            transition: border-color 0.2s;
+            min-width: 240px;
+        }
+
+        .tx-search:focus-within { border-color: var(--accent); }
+
+        .tx-search input {
+            border: none;
+            background: transparent;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            outline: none;
+            width: 100%;
+        }
+
+        .tx-search input::placeholder {
+            color: var(--text-secondary);
+            font-family: 'DM Sans', sans-serif;
+        }
+
+        .tx-close {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 18px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tx-close:hover {
+            background: var(--border-color);
+        }
+
+        .tx-panel-body {
+            flex: 1;
+            overflow: auto;
+            padding: 0;
+        }
+
+        .tx-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        .tx-table th {
+            position: sticky;
+            top: 0;
+            background: var(--bg-tertiary);
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            border-bottom: 2px solid var(--border-color);
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+            z-index: 2;
+        }
+
+        .tx-table th:hover { color: var(--text-primary); background: var(--border-color); }
+        .tx-table th.tx-sorted { color: var(--accent); }
+        .tx-table th .tx-sort-icon { margin-left: 5px; opacity: 0.4; }
+        .tx-table th.tx-sorted .tx-sort-icon { opacity: 1; }
+
+        .tx-table td {
+            padding: 11px 16px;
+            border-bottom: 1px solid var(--border-color);
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-primary);
+            white-space: nowrap;
+        }
+
+        .tx-table tr:hover td { background: rgba(196,30,58,0.04); }
+        .tx-table tr.tx-hidden { display: none; }
+
+        .tx-row-count {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .tx-yes-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            background: var(--success-bg);
+            color: var(--success);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .tx-missed-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            background: var(--warning-bg);
+            color: var(--warning);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- Toast notification -->
+        <div class="toast" id="toast"></div>
+
         <header>
             <h1>Transaction Reconciliation</h1>
             <p class="subtitle">Compare and reconcile transactions between two Excel files</p>
         </header>
+
+        <!-- Google Auth Bar -->
+        <div class="google-auth-bar" id="googleAuthBar">
+            <div class="auth-status">
+                <div class="auth-dot" id="authDot"></div>
+                <span id="authStatusText">Not connected — sign in to enable write-back to Google Sheets</span>
+            </div>
+            <button class="btn-google" id="googleSignInBtn" onclick="handleGoogleSignIn()">
+                <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+                    <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
+                    <path d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z" fill="#FBBC05"/>
+                    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.96L3.964 7.293C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+                </svg>
+                Sign in with Google
+            </button>
+            <button class="btn-google" id="googleSignOutBtn" onclick="handleGoogleSignOut()" style="display:none;">Sign out</button>
+        </div>
 
         <div class="upload-section">
             <div class="upload-card" id="upload1">
@@ -1077,6 +1449,12 @@
                 </svg>
                 Download Report
             </button>
+            <button class="btn btn-secondary" id="viewAllBtn" style="display: none;" onclick="openTransactionsViewer()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
+                </svg>
+                View All Transactions
+            </button>
             <button class="btn btn-reset" id="resetBtn" style="display: none;" onclick="resetApp()">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
@@ -1093,7 +1471,31 @@
         <div class="results" id="results">
             <div class="date-range" id="dateRange"></div>
 
-            <!-- OVERVIEW CARDS -->
+            <!-- CRITICAL BANNER: Unpaid missed appointments -->
+            <div class="critical-banner" id="criticalBanner">
+                <div class="critical-banner-header">
+                    <span class="critical-icon">🚨</span>
+                    <div>
+                        <p class="critical-title">SSC Has Not Paid for These Missed Appointments</p>
+                        <p class="critical-subtitle">These are logged in your records but have no matching entry in the SSC payroll — SSC owes you for these.</p>
+                    </div>
+                    <span class="critical-count" id="criticalCount">0</span>
+                </div>
+                <div class="critical-table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Customer</th>
+                                <th>Type</th>
+                                <th>Expected Payout</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="criticalBody"></tbody>
+                    </table>
+                </div>
+            </div>
             <div class="overview-bar">
                 <div class="overview-item">
                     <span class="overview-num" id="totalAnalyzed">0</span>
@@ -1175,6 +1577,7 @@
                     <button class="filter-tab active" data-filter="all" onclick="setFilter('all')">All <span class="tab-count" id="tabCountAll">0</span></button>
                     <button class="filter-tab" data-filter="mismatch" onclick="setFilter('mismatch')">⚠ Mismatches <span class="tab-count" id="tabCountMismatch">0</span></button>
                     <button class="filter-tab" data-filter="notfound" onclick="setFilter('notfound')">? Not Found <span class="tab-count" id="tabCountNotFound">0</span></button>
+                    <button class="filter-tab" data-filter="missed" onclick="setFilter('missed')">✗ Missed Appts <span class="tab-count" id="tabCountMissed">0</span></button>
                     <button class="filter-tab" data-filter="ok" onclick="setFilter('ok')">✓ OK <span class="tab-count" id="tabCountOk">0</span></button>
                 </div>
 
@@ -1206,6 +1609,32 @@
             <!-- ======================== -->
             <div class="orphan-cards" id="orphanCards">
 
+                <!-- Card: Missed Appointments -->
+                <div class="orphan-card" id="cardMissed" style="display:none;">
+                    <div class="orphan-header" style="background: rgba(234,179,8,0.1); border-bottom: 2px solid var(--warning);">
+                        <h3>📅 Missed Appointments</h3>
+                        <p>Customers who did not show up. No customer payment expected — only verifying SSC pays the correct missed fee.</p>
+                        <span class="orphan-count" id="countMissed" style="color: var(--warning);">0</span>
+                    </div>
+                    <div class="table-scroll" style="max-height: 400px;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Customer</th>
+                                    <th>Type</th>
+                                    <th>SSC Payout</th>
+                                    <th>Expected</th>
+                                    <th>Difference</th>
+                                    <th>Status</th>
+                                    <th style="width: 140px;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="missedBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- Card: In your records but NOT in SSC Payroll -->
                 <div class="orphan-card" id="cardNotInSSC" style="display:none;">
                     <div class="orphan-header warning-header">
@@ -1233,7 +1662,7 @@
                 <div class="orphan-card" id="cardNotInRecord" style="display:none;">
                     <div class="orphan-header error-header">
                         <h3>🔍 In SSC Payroll — Not in Your Records</h3>
-                        <p>SSC processed these transactions, but no matching entry exists in your sheet. Payout calculation included.</p>
+                        <p>SSC processed these transactions, but no matching entry exists in your sheet.</p>
                         <span class="orphan-count" id="countNotInRecord">0</span>
                     </div>
                     <div class="table-scroll" style="max-height: 400px;">
@@ -1245,9 +1674,6 @@
                                     <th>Services</th>
                                     <th>SSC Payment</th>
                                     <th>SSC Payout</th>
-                                    <th>Expected Payout</th>
-                                    <th>Payout Diff</th>
-                                    <th>Payout Status</th>
                                 </tr>
                             </thead>
                             <tbody id="notInRecordBody"></tbody>
@@ -1260,7 +1686,7 @@
         </div>
 
         <footer>
-            <p>© 2025 Durham Autohaus. All Rights Reserved.</p>
+            <p>© 2026 Durham Autohaus. All Rights Reserved.</p>
         </footer>
     </div>
 
@@ -1291,6 +1717,287 @@
         // Categories for payout rule
         const SPECIAL_ADDONS = new Set(['Special Vehicle Install', 'Special Install', 'Special Vehicle Removal', 'Special Removal', 'Unscheduled Service']);
         const MISSED_SERVICES = new Set(['Missed Install', 'Missed Service', 'Missed Other', 'Missed Removal']);
+
+        // ============================================================
+        // GOOGLE OAUTH + SHEETS API CONFIG
+        // ============================================================
+        const GOOGLE_CLIENT_ID = '486597956009-s5t3ld837hc4cr675hg0hn97set1od2h.apps.googleusercontent.com';
+        const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+        const SHEET_NAME = 'Sheet1'; // Tab name in the Google Sheet
+
+        let googleAccessToken = null;
+        let googleTokenExpiry = 0;
+        let sheetHeaders = null; // cached column headers from the sheet
+
+        // ============================================================
+        // GOOGLE SIGN IN / OUT
+        // ============================================================
+        function handleGoogleSignIn() {
+            if (!GOOGLE_CLIENT_ID) {
+                showToast('OAuth Client ID not configured. See setup instructions.', 'error');
+                return;
+            }
+            setAuthState('connecting');
+            const client = google.accounts.oauth2.initTokenClient({
+                client_id: GOOGLE_CLIENT_ID,
+                scope: SHEETS_SCOPE,
+                callback: (response) => {
+                    if (response.error) {
+                        setAuthState('disconnected');
+                        showToast('Sign-in failed: ' + response.error, 'error');
+                        return;
+                    }
+                    googleAccessToken = response.access_token;
+                    googleTokenExpiry = Date.now() + (response.expires_in * 1000);
+                    setAuthState('connected');
+                    showToast('Connected to Google Sheets ✓', 'success');
+                    // Re-render missed table to enable buttons
+                    if (reconciliationResults) renderOrphanCards();
+                }
+            });
+            client.requestAccessToken();
+        }
+
+        function handleGoogleSignOut() {
+            if (googleAccessToken) {
+                google.accounts.oauth2.revoke(googleAccessToken);
+            }
+            googleAccessToken = null;
+            googleTokenExpiry = 0;
+            sheetHeaders = null;
+            setAuthState('disconnected');
+            showToast('Signed out', 'success');
+            if (reconciliationResults) renderOrphanCards();
+        }
+
+        function isGoogleAuthed() {
+            return googleAccessToken && Date.now() < googleTokenExpiry;
+        }
+
+        function setAuthState(state) {
+            const dot = document.getElementById('authDot');
+            const text = document.getElementById('authStatusText');
+            const signInBtn = document.getElementById('googleSignInBtn');
+            const signOutBtn = document.getElementById('googleSignOutBtn');
+            dot.className = 'auth-dot';
+            if (state === 'connected') {
+                dot.classList.add('connected');
+                text.textContent = 'Connected to Google Sheets — write-back enabled';
+                signInBtn.style.display = 'none';
+                signOutBtn.style.display = 'inline-flex';
+            } else if (state === 'connecting') {
+                dot.classList.add('connecting');
+                text.textContent = 'Connecting...';
+                signInBtn.disabled = true;
+            } else {
+                text.textContent = 'Not connected — sign in to mark missed appointments as reconciled';
+                signInBtn.style.display = 'inline-flex';
+                signInBtn.disabled = false;
+                signOutBtn.style.display = 'none';
+            }
+        }
+
+        // ============================================================
+        // TOAST NOTIFICATION
+        // ============================================================
+        let toastTimeout = null;
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = `toast ${type} show`;
+            clearTimeout(toastTimeout);
+            const duration = type === 'error' ? 6000 : 3500;
+            toastTimeout = setTimeout(() => { toast.classList.remove('show'); }, duration);
+        }
+
+        // ============================================================
+        // SHEETS API — get headers to find column index
+        // ============================================================
+        async function getSheetHeaders() {
+            if (sheetHeaders) return sheetHeaders;
+            const resp = await fetch(
+                `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(SHEET_NAME + '!1:1')}`,
+                { headers: { Authorization: `Bearer ${googleAccessToken}` } }
+            );
+            if (!resp.ok) throw new Error('Could not read sheet headers');
+            const data = await resp.json();
+            sheetHeaders = (data.values && data.values[0]) ? data.values[0] : [];
+            return sheetHeaders;
+        }
+
+        // ============================================================
+        // SHEETS API — find the row number for a customer+date in File 1
+        // Returns 1-based row index, or -1 if not found
+        // ============================================================
+        async function findSheetRow(customerCode, serviceDateStr) {
+            const dateKey = serviceDateStr; // already YYYY-MM-DD string
+            const resp = await fetch(
+                `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(SHEET_NAME)}`,
+                { headers: { Authorization: `Bearer ${googleAccessToken}` } }
+            );
+
+            if (resp.status === 401) {
+                googleAccessToken = null; // force re-auth
+                setAuthState('disconnected');
+                throw new Error('SESSION_EXPIRED');
+            }
+            if (resp.status === 403) {
+                throw new Error('NO_ACCESS');
+            }
+            if (!resp.ok) {
+                throw new Error(`SHEETS_ERROR:${resp.status}`);
+            }
+
+            const data = await resp.json();
+            const rows = data.values || [];
+
+            // Find header row to get column indices
+            let headerIdx = -1;
+            for (let i = 0; i < Math.min(10, rows.length); i++) {
+                if (rows[i].some(c => c && (c.includes('Customer No') || c.includes('Customer Code')))) {
+                    headerIdx = i;
+                    break;
+                }
+            }
+            if (headerIdx === -1) throw new Error('HEADER_NOT_FOUND');
+
+            const headers = rows[headerIdx];
+            const custColIdx = headers.findIndex(h => h && (h.includes('Customer No') || h.includes('Customer Code')));
+            const dateColIdx = headers.findIndex(h => h && h.toLowerCase().includes('date'));
+            const svcColIdx = headers.findIndex(h => h && h.toLowerCase().includes('services'));
+            const reconColIdx = headers.findIndex(h => h && h.includes('Missed Service Reconciliated'));
+
+            if (custColIdx === -1) throw new Error('HEADER_NOT_FOUND');
+            if (reconColIdx === -1) throw new Error('RECON_COL_NOT_FOUND');
+
+            // Search data rows for matching customer + date
+            for (let i = headerIdx + 1; i < rows.length; i++) {
+                const row = rows[i];
+                const rowCust = row[custColIdx] ? String(Math.floor(Number(row[custColIdx]))) : '';
+                const rowDate = row[dateColIdx] ? formatDate(parseDate(row[dateColIdx])) : '';
+                const rowSvc = row[svcColIdx] ? String(row[svcColIdx]).toLowerCase() : '';
+
+                if (rowCust === String(customerCode) &&
+                    rowDate === dateKey &&
+                    rowSvc.startsWith('missed')) {
+                    return { rowNumber: i + 1, reconColIdx, reconColLetter: colIndexToLetter(reconColIdx) };
+                }
+            }
+            return null;
+        }
+
+        // ============================================================
+        // FRIENDLY ERROR MESSAGES
+        // ============================================================
+        function getFriendlyError(e, customerCode, serviceDateStr) {
+            const msg = e.message || '';
+            if (msg === 'SESSION_EXPIRED') {
+                return {
+                    text: 'Your session expired. Please sign in with Google again.',
+                    action: () => handleGoogleSignIn()
+                };
+            }
+            if (msg === 'NO_ACCESS') {
+                return {
+                    text: 'Your Google account doesn\'t have write access to this sheet. Make sure you\'re signed in with the correct account.',
+                    action: null
+                };
+            }
+            if (msg === 'HEADER_NOT_FOUND') {
+                return {
+                    text: 'Could not find the expected columns in the sheet. Make sure the sheet structure hasn\'t changed.',
+                    action: null
+                };
+            }
+            if (msg === 'RECON_COL_NOT_FOUND') {
+                return {
+                    text: 'Column "Missed Service Reconciliated?" not found in the sheet. Please add it and try again.',
+                    action: null
+                };
+            }
+            if (msg.startsWith('SHEETS_ERROR:')) {
+                const code = msg.split(':')[1];
+                return {
+                    text: `Google Sheets returned an error (code ${code}). Please try again or check your connection.`,
+                    action: null
+                };
+            }
+            if (!customerCode || !serviceDateStr) {
+                return { text: 'Could not identify the row to update. Try re-running the reconciliation.', action: null };
+            }
+            if (msg.includes('not found')) {
+                return {
+                    text: `No matching row found for customer ${customerCode} on ${serviceDateStr}. The sheet may have changed since the last fetch.`,
+                    action: null
+                };
+            }
+            return { text: 'Something went wrong: ' + msg, action: null };
+        }
+
+        async function markAsReconciled(btn, customerCode, serviceDateStr) {
+            if (!isGoogleAuthed()) {
+                showToast('Sign in with Google first to enable write-back', 'error');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.classList.add('loading');
+            btn.textContent = 'Saving...';
+
+            try {
+                const match = await findSheetRow(customerCode, serviceDateStr);
+                if (!match) {
+                    throw new Error(`Row not found for customer ${customerCode} on ${serviceDateStr}`);
+                }
+
+                const range = `${SHEET_NAME}!${match.reconColLetter}${match.rowNumber}`;
+                const resp = await fetch(
+                    `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
+                    {
+                        method: 'PUT',
+                        headers: {
+                            Authorization: `Bearer ${googleAccessToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ values: [['YES']] })
+                    }
+                );
+
+                if (resp.status === 401) {
+                    googleAccessToken = null;
+                    setAuthState('disconnected');
+                    throw new Error('SESSION_EXPIRED');
+                }
+                if (resp.status === 403) throw new Error('NO_ACCESS');
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({}));
+                    throw new Error(err.error?.message || `SHEETS_ERROR:${resp.status}`);
+                }
+
+                // Update UI immediately
+                const td = btn.closest('td');
+                td.innerHTML = '<span class="reconciled-badge">✓ Reconciled</span>';
+
+                // Mark in memory so re-renders stay correct
+                const missedRow = reconciliationResults.missedResults.find(r =>
+                    r.customerCode === customerCode &&
+                    formatDate(r.serviceDate) === serviceDateStr
+                );
+                if (missedRow) missedRow.reconciled = true;
+
+                sheetHeaders = null;
+                showToast(`Customer ${customerCode} marked as reconciled ✓`, 'success');
+
+            } catch (e) {
+                const friendly = getFriendlyError(e, customerCode, serviceDateStr);
+                btn.disabled = false;
+                btn.classList.remove('loading');
+                btn.textContent = '✓ Mark Reconciled';
+                showToast(friendly.text, 'error');
+                // If it's a session expiry, auto-trigger re-auth after toast
+                if (friendly.action) setTimeout(friendly.action, 1000);
+            }
+        }
 
         // ============================================================
         // GOOGLE SHEETS CONFIG
@@ -1359,6 +2066,7 @@
             resultsDiv.classList.remove('show');
             downloadBtn.style.display = 'none';
             document.getElementById('resetBtn').style.display = 'none';
+            document.getElementById('viewAllBtn').style.display = 'none';
             reconcileBtn.disabled = true;
 
             // Scroll back to top
@@ -1586,9 +2294,9 @@
             `;
             fetchBtn.classList.remove('loading');
             document.getElementById('fetchError').classList.remove('show');
+            document.getElementById('viewAllBtn').style.display = 'inline-flex';
 
             reconcileBtn.disabled = !(file1Data && file2Data);
-
         }
 
         // ============================================================
@@ -1687,6 +2395,7 @@
                     file1Data = normalizedData;
                     document.getElementById('upload1').classList.add('has-file');
                     document.getElementById('file1-name').textContent = file.name;
+                    document.getElementById('viewAllBtn').style.display = 'inline-flex';
                 } else {
                     file2Data = normalizedData;
                     document.getElementById('upload2').classList.add('has-file');
@@ -1836,10 +2545,15 @@
 
             // Find Proof of Payment column
             const proofCol = findColumnByPattern(data, /proof.*payment/i);
+            // Find "Missed Service Reconciliated?" column
+            const reconCol = findColumnByPattern(data, /missed.*reconcili/i);
 
             for (const row of data) {
                 const custRaw = row[customerCol];
                 if (custRaw === null || custRaw === undefined || custRaw === '' || isNaN(Number(custRaw)) || Number(custRaw) <= 0) continue;
+
+                // Skip rows already marked as reconciled
+                if (reconCol && row[reconCol] && String(row[reconCol]).trim().toUpperCase() === 'YES') continue;
 
                 const cust = Math.floor(Number(custRaw));
                 const d = parseDate(row[dateCol]);
@@ -2021,33 +2735,218 @@
                     const f2Entries = extractFile2Totals(file2Data, customerCol2, owedCol2, methodCol2, dateCol2, chargesCol2, feesCol2);
 
 
-                    // Build lookup: for F2 entries without exact date match in F1,
-                    // try matching by customer number alone (date may differ slightly)
-                    const f1ByCust = {};
+                    // ============================================================
+                    // SEPARATE MISSED APPOINTMENTS before normal matching
+                    // F1: rows where service starts with "Missed"
+                    // F2: entries whose services list contains only Missed* types
+                    // ============================================================
+                    function isMissedF1(entry) {
+                        const svc = (entry.service || '').trim();
+                        return svc.toLowerCase().startsWith('missed');
+                    }
+
+                    function isMissedF2(entry) {
+                        const svcs = entry.services || [];
+                        return svcs.length > 0 && svcs.every(s => (s.type || s).toLowerCase().startsWith('missed'));
+                    }
+
+                    // Split F1 into missed and normal
+                    const f1Missed = {}, f1Normal = {};
                     for (const [key, entry] of Object.entries(f1Filtered)) {
+                        if (isMissedF1(entry)) f1Missed[key] = entry;
+                        else f1Normal[key] = entry;
+                    }
+
+                    // Split F2 into missed and normal
+                    const f2Missed = {}, f2Normal = {};
+                    for (const [key, entry] of Object.entries(f2Entries)) {
+                        if (isMissedF2(entry)) f2Missed[key] = entry;
+                        else f2Normal[key] = entry;
+                    }
+
+                    // ============================================================
+                    // RECONCILE MISSED APPOINTMENTS
+                    // CRITICAL  = in F1 (your sheet) but NOT in F2 (SSC payroll)
+                    //             → SSC forgot to pay — main concern
+                    // MATCHED   = in both → verify payout amount
+                    // SSC_ONLY  = in F2 but NOT in F1 → informational only
+                    // ============================================================
+                    const serviceSummary = {};
+                    const sortByDate = (a, b) => (a.date || new Date(0)).getTime() - (b.date || new Date(0)).getTime();
+
+                    const missedResults = [];
+                    let missedMatches = 0, missedMismatches = 0, missedCritical = 0, missedSSCOnly = 0;
+
+                    const missedAllKeys = new Set([...Object.keys(f1Missed), ...Object.keys(f2Missed)]);
+                    const missedExactMatched = new Set();
+
+                    for (const key of missedAllKeys) {
+                        if (f1Missed[key] && f2Missed[key]) missedExactMatched.add(key);
+                    }
+
+                    // Fuzzy match remaining missed entries by customer + closest date
+                    const unmatchedMissedF1 = {}, unmatchedMissedF2 = {};
+                    for (const [key, entry] of Object.entries(f1Missed)) {
+                        if (!missedExactMatched.has(key)) {
+                            if (!unmatchedMissedF1[entry.customer]) unmatchedMissedF1[entry.customer] = [];
+                            unmatchedMissedF1[entry.customer].push({ key, ...entry });
+                        }
+                    }
+                    for (const [key, entry] of Object.entries(f2Missed)) {
+                        if (!missedExactMatched.has(key)) {
+                            if (!unmatchedMissedF2[entry.customer]) unmatchedMissedF2[entry.customer] = [];
+                            unmatchedMissedF2[entry.customer].push({ key, ...entry });
+                        }
+                    }
+
+                    const missedFuzzy = new Map();
+                    for (const [cust, f1List] of Object.entries(unmatchedMissedF1)) {
+                        const f2List = unmatchedMissedF2[cust];
+                        if (!f2List || f2List.length === 0) continue;
+                        f1List.sort(sortByDate);
+                        f2List.sort(sortByDate);
+                        const usedF2 = new Set();
+                        for (const f1e of f1List) {
+                            let bestIdx = -1, bestDist = Infinity;
+                            for (let i = 0; i < f2List.length; i++) {
+                                if (usedF2.has(i)) continue;
+                                const dist = f1e.date && f2List[i].date
+                                    ? Math.abs(f1e.date.getTime() - f2List[i].date.getTime())
+                                    : 0;
+                                if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+                            }
+                            if (bestIdx >= 0) {
+                                missedFuzzy.set(f1e.key, f2List[bestIdx].key);
+                                usedF2.add(bestIdx);
+                            }
+                        }
+                    }
+
+                    const missedUsedF1 = new Set(), missedUsedF2 = new Set();
+
+                    // Helper: process a matched pair (F1 + F2 both exist)
+                    function processMissedMatch(f1, f2) {
+                        const servicesList = f2.services || [];
+                        const expectedPayout = calculateExpectedPayout(servicesList);
+                        const payoutDiff = f2.payout - expectedPayout;
+                        const isMatch = Math.abs(payoutDiff) < 0.01;
+                        if (isMatch) missedMatches++; else missedMismatches++;
+                        for (const svc of servicesList) {
+                            const svcName = svc.type || svc;
+                            if (!serviceSummary[svcName]) serviceSummary[svcName] = { count: 0, total: 0 };
+                            serviceSummary[svcName].count++;
+                            serviceSummary[svcName].total += PAYOUT_RATES[svcName] || 0;
+                        }
+                        missedResults.push({
+                            serviceDate: f1 ? f1.date : f2.date,
+                            customerCode: f1 ? f1.customer : f2.customer,
+                            servicesDisplay: formatServices(servicesList) || (f1 ? f1.service : '-'),
+                            sscPayout: f2.payout,
+                            expectedPayout,
+                            payoutDiff: isMatch ? 0 : payoutDiff,
+                            payoutStatus: isMatch ? 'MATCH' : 'MISMATCH',
+                            missedStatus: 'MATCHED'
+                        });
+                    }
+
+                    // Exact matches
+                    for (const key of missedExactMatched) {
+                        processMissedMatch(f1Missed[key], f2Missed[key]);
+                    }
+                    // Fuzzy matches
+                    for (const [f1Key, f2Key] of missedFuzzy) {
+                        processMissedMatch(f1Missed[f1Key], f2Missed[f2Key]);
+                        missedUsedF1.add(f1Key);
+                        missedUsedF2.add(f2Key);
+                    }
+
+                    // 🚨 CRITICAL: F1 has missed record, SSC has NO matching entry
+                    // → SSC has not paid for this — main concern
+                    for (const [key, entry] of Object.entries(f1Missed)) {
+                        if (missedExactMatched.has(key) || missedUsedF1.has(key)) continue;
+                        missedCritical++;
+                        const expectedPayout = PAYOUT_RATES[entry.service] || 0;
+                        if (expectedPayout && serviceSummary[entry.service] === undefined) {
+                            serviceSummary[entry.service] = { count: 0, total: 0 };
+                        }
+                        missedResults.push({
+                            serviceDate: entry.date,
+                            customerCode: entry.customer,
+                            servicesDisplay: entry.service || 'Missed',
+                            sscPayout: undefined,
+                            expectedPayout,
+                            payoutDiff: null,
+                            payoutStatus: 'CRITICAL',
+                            missedStatus: 'CRITICAL'
+                        });
+                    }
+
+                    // Informational: SSC has a missed entry, no matching record in your sheet
+                    // (less common — could be a logging gap)
+                    for (const [key, entry] of Object.entries(f2Missed)) {
+                        if (missedExactMatched.has(key) || missedUsedF2.has(key)) continue;
+                        const servicesList = entry.services || [];
+                        const expectedPayout = calculateExpectedPayout(servicesList);
+                        const payoutDiff = entry.payout - expectedPayout;
+                        const isMatch = Math.abs(payoutDiff) < 0.01;
+                        if (isMatch) missedMatches++; else missedMismatches++;
+                        for (const svc of servicesList) {
+                            const svcName = svc.type || svc;
+                            if (!serviceSummary[svcName]) serviceSummary[svcName] = { count: 0, total: 0 };
+                            serviceSummary[svcName].count++;
+                            serviceSummary[svcName].total += PAYOUT_RATES[svcName] || 0;
+                        }
+                        missedSSCOnly++;
+                        missedResults.push({
+                            serviceDate: entry.date,
+                            customerCode: entry.customer,
+                            servicesDisplay: formatServices(servicesList),
+                            sscPayout: entry.payout,
+                            expectedPayout,
+                            payoutDiff: isMatch ? 0 : payoutDiff,
+                            payoutStatus: isMatch ? 'MATCH' : 'MISMATCH',
+                            missedStatus: 'SSC_ONLY'
+                        });
+                    }
+
+                    // Sort: CRITICAL first, then MISMATCH, then SSC_ONLY, then MATCH
+                    missedResults.sort((a, b) => {
+                        const score = r => {
+                            if (r.missedStatus === 'CRITICAL') return 0;
+                            if (r.payoutStatus === 'MISMATCH') return 1;
+                            if (r.missedStatus === 'SSC_ONLY') return 2;
+                            return 3;
+                        };
+                        return score(a) - score(b);
+                    });
+
+                    // ============================================================
+                    // NOW run normal reconciliation on f1Normal / f2Normal only
+                    // ============================================================
+                    const f1ByCust = {};
+                    for (const [key, entry] of Object.entries(f1Normal)) {
                         const c = entry.customer;
                         if (!f1ByCust[c]) f1ByCust[c] = [];
                         f1ByCust[c].push({ key, ...entry });
                     }
                     const f2ByCust = {};
-                    for (const [key, entry] of Object.entries(f2Entries)) {
+                    for (const [key, entry] of Object.entries(f2Normal)) {
                         const c = entry.customer;
                         if (!f2ByCust[c]) f2ByCust[c] = [];
                         f2ByCust[c].push({ key, ...entry });
                     }
 
                     // Match: prefer exact key match, fallback to customer-only match
-                    const allKeys = new Set([...Object.keys(f1Filtered), ...Object.keys(f2Entries)]);
+                    const allKeys = new Set([...Object.keys(f1Normal), ...Object.keys(f2Normal)]);
                     const matched = new Set();
                     const results = [];
                     let paymentMatches = 0, paymentMismatches = 0;
                     let payoutMatches = 0, payoutMismatches = 0;
                     let notFoundInF2 = 0, notFoundInF1 = 0;
-                    const serviceSummary = {};
 
                     // Pass 1: Exact composite key matches
                     for (const key of allKeys) {
-                        if (f1Filtered[key] && f2Entries[key]) {
+                        if (f1Normal[key] && f2Normal[key]) {
                             matched.add(key);
                         }
                     }
@@ -2055,7 +2954,7 @@
                     // Pass 2: For unmatched, try customer-only matching
                     // Group unmatched F1 and F2 by customer
                     const unmatchedF1ByCust = {};
-                    for (const [key, entry] of Object.entries(f1Filtered)) {
+                    for (const [key, entry] of Object.entries(f1Normal)) {
                         if (!matched.has(key)) {
                             const c = entry.customer;
                             if (!unmatchedF1ByCust[c]) unmatchedF1ByCust[c] = [];
@@ -2063,7 +2962,7 @@
                         }
                     }
                     const unmatchedF2ByCust = {};
-                    for (const [key, entry] of Object.entries(f2Entries)) {
+                    for (const [key, entry] of Object.entries(f2Normal)) {
                         if (!matched.has(key)) {
                             const c = entry.customer;
                             if (!unmatchedF2ByCust[c]) unmatchedF2ByCust[c] = [];
@@ -2078,7 +2977,6 @@
                         if (!f2List || f2List.length === 0) continue;
 
                         // Sort both by date, pair them sequentially
-                        const sortByDate = (a, b) => (a.date || new Date(0)).getTime() - (b.date || new Date(0)).getTime();
                         f1List.sort(sortByDate);
                         f2List.sort(sortByDate);
 
@@ -2101,8 +2999,8 @@
 
                     // Process all exact matches
                     for (const key of matched) {
-                        const f1 = f1Filtered[key];
-                        const f2 = f2Entries[key];
+                        const f1 = f1Normal[key];
+                        const f2 = f2Normal[key];
                         processMatch(f1, f2, results, serviceSummary);
                     }
 
@@ -2110,15 +3008,15 @@
                     const fuzzyUsedF1 = new Set();
                     const fuzzyUsedF2 = new Set();
                     for (const [f1Key, f2Key] of fuzzyMatched) {
-                        const f1 = f1Filtered[f1Key];
-                        const f2 = f2Entries[f2Key];
+                        const f1 = f1Normal[f1Key];
+                        const f2 = f2Normal[f2Key];
                         processMatch(f1, f2, results, serviceSummary);
                         fuzzyUsedF1.add(f1Key);
                         fuzzyUsedF2.add(f2Key);
                     }
 
                     // Process unmatched F1 (not found in SSC Payroll)
-                    for (const [key, entry] of Object.entries(f1Filtered)) {
+                    for (const [key, entry] of Object.entries(f1Normal)) {
                         if (matched.has(key) || fuzzyUsedF1.has(key)) continue;
                         results.push({
                             serviceDate: entry.date,
@@ -2139,7 +3037,7 @@
                     }
 
                     // Process unmatched F2 (not found in Transactions Record)
-                    for (const [key, entry] of Object.entries(f2Entries)) {
+                    for (const [key, entry] of Object.entries(f2Normal)) {
                         if (matched.has(key) || fuzzyUsedF2.has(key)) continue;
                         const servicesList = entry.services || [];
                         const expectedPayout = calculateExpectedPayout(servicesList);
@@ -2261,7 +3159,7 @@
 
                     reconciliationResults = {
                         dateRange: dateRange,
-                        totalAnalyzed: Object.keys(f1Filtered).length,
+                        totalAnalyzed: Object.keys(f1Normal).length,
                         totalBeforeFilter: totalBeforeFilter,
                         excludedByDate: excludedByDate,
                         paymentMatches: paymentMatches,
@@ -2271,7 +3169,12 @@
                         notFoundInF2: notFoundInF2,
                         notFoundInF1: notFoundInF1,
                         serviceSummary: serviceSummary,
-                        details: results
+                        details: results,
+                        missedResults: missedResults,
+                        missedMatches: missedMatches,
+                        missedMismatches: missedMismatches,
+                        missedCritical: missedCritical,
+                        missedSSCOnly: missedSSCOnly
                     };
 
                     displayResults();
@@ -2494,6 +3397,58 @@
         function renderOrphanCards() {
             const r = reconciliationResults;
 
+            // Card 0: Missed Appointments
+            const missedRows = r.missedResults || [];
+            const cardMissed = document.getElementById('cardMissed');
+            const bodyMissed = document.getElementById('missedBody');
+            bodyMissed.innerHTML = '';
+
+            if (missedRows.length > 0) {
+                cardMissed.style.display = 'block';
+                document.getElementById('countMissed').textContent = missedRows.length;
+                for (const row of missedRows) {
+                    // Status badge
+                    let missedBadge;
+                    if (row.missedStatus === 'CRITICAL') {
+                        missedBadge = '<span class="status-badge status-mismatch">🚨 UNPAID</span>';
+                    } else if (row.missedStatus === 'SSC_ONLY') {
+                        missedBadge = `<span class="status-badge status-notfound">SSC ONLY</span>`;
+                    } else {
+                        const sc = row.payoutStatus === 'MATCH' ? 'status-match' : 'status-mismatch';
+                        missedBadge = `<span class="status-badge ${sc}">${row.payoutStatus}</span>`;
+                    }
+
+                    // Action cell — only for MATCHED and CRITICAL rows (both exist in F1)
+                    let actionCell;
+                    if (row.reconciled) {
+                        actionCell = '<span class="reconciled-badge">✓ Reconciled</span>';
+                    } else if (row.missedStatus === 'MATCHED' || row.missedStatus === 'CRITICAL') {
+                        const authed = isGoogleAuthed();
+                        const dateStr = formatDate(row.serviceDate);
+                        actionCell = authed
+                            ? `<button class="btn-reconcile" onclick="markAsReconciled(this, ${row.customerCode}, '${dateStr}')">✓ Mark Reconciled</button>`
+                            : `<button class="btn-reconcile" disabled title="Sign in with Google to enable this">✓ Mark Reconciled</button>`;
+                    } else {
+                        actionCell = '<span style="color:var(--text-secondary);font-size:0.75rem;">—</span>';
+                    }
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${formatDate(row.serviceDate)}</td>
+                        <td>${row.customerCode}</td>
+                        <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
+                        <td>${row.sscPayout !== undefined ? '$' + row.sscPayout.toFixed(2) : '-'}</td>
+                        <td>$${(row.expectedPayout || 0).toFixed(2)}</td>
+                        <td class="${row.payoutDiff > 0 ? 'diff-positive' : row.payoutDiff < 0 ? 'diff-negative' : ''}">${row.payoutDiff !== null ? '$' + row.payoutDiff.toFixed(2) : '-'}</td>
+                        <td>${missedBadge}</td>
+                        <td>${actionCell}</td>
+                    `;
+                    bodyMissed.appendChild(tr);
+                }
+            } else {
+                cardMissed.style.display = 'none';
+            }
+
             // Card 1: In your records, NOT in SSC Payroll
             const notInSSC = r.details.filter(row => row.paymentStatus === 'NOT FOUND in SSC Payroll');
             const card1 = document.getElementById('cardNotInSSC');
@@ -2530,8 +3485,6 @@
                 document.getElementById('countNotInRecord').textContent = notInRecord.length;
 
                 for (const row of notInRecord) {
-                    const payoutStatusClass = row.payoutStatus === 'MATCH' ? 'status-match' :
-                                              row.payoutStatus === 'MISMATCH' ? 'status-mismatch' : 'status-notfound';
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td>${formatDate(row.serviceDate)}</td>
@@ -2539,9 +3492,6 @@
                         <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
                         <td>${row.owedFile2 !== undefined ? '$' + row.owedFile2.toFixed(2) : '-'}</td>
                         <td>${row.sscPayout !== undefined ? '$' + row.sscPayout.toFixed(2) : '-'}</td>
-                        <td>$${(row.expectedPayout || 0).toFixed(2)}</td>
-                        <td class="${row.payoutDiff > 0 ? 'diff-positive' : row.payoutDiff < 0 ? 'diff-negative' : ''}">${row.payoutDiff !== null ? '$' + row.payoutDiff.toFixed(2) : '-'}</td>
-                        <td><span class="status-badge ${payoutStatusClass}">${row.payoutStatus}</span></td>
                     `;
                     body2.appendChild(tr);
                 }
@@ -2558,6 +3508,25 @@
             document.querySelectorAll('.filter-tab').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.filter === filter);
             });
+
+            const orphanCards = document.getElementById('orphanCards');
+            const tableContainer = document.querySelector('.table-container');
+            const searchBar = document.querySelector('.search-bar');
+
+            if (filter === 'notfound' || filter === 'missed') {
+                orphanCards.style.display = 'flex';
+                tableContainer.style.display = 'none';
+                searchBar.style.display = 'none';
+                // Show only the relevant card(s)
+                document.getElementById('cardMissed').style.display = filter === 'missed' ? 'block' : 'none';
+                document.getElementById('cardNotInSSC').style.display = filter === 'notfound' ? 'block' : 'none';
+                document.getElementById('cardNotInRecord').style.display = filter === 'notfound' ? 'block' : 'none';
+            } else {
+                orphanCards.style.display = 'none';
+                tableContainer.style.display = 'block';
+                searchBar.style.display = 'flex';
+            }
+
             if (rerender) renderUnifiedTable();
         }
 
@@ -2666,8 +3635,38 @@
             document.getElementById('tabCountMismatch').textContent = mismatchRows.length;
             document.getElementById('tabCountOk').textContent = okRows.length;
             document.getElementById('tabCountNotFound').textContent = notFoundRows.length;
+            document.getElementById('tabCountMissed').textContent = (r.missedResults || []).length;
 
-            // Sort: mismatches first, then not found, then matches
+            // Critical banner — unpaid missed appointments (in our sheet, not in SSC)
+            const criticalRows = (r.missedResults || []).filter(row => row.missedStatus === 'CRITICAL');
+            const criticalBanner = document.getElementById('criticalBanner');
+            const criticalBody = document.getElementById('criticalBody');
+            criticalBody.innerHTML = '';
+
+            if (criticalRows.length > 0) {
+                criticalBanner.classList.add('show');
+                document.getElementById('criticalCount').textContent = criticalRows.length;
+                for (const row of criticalRows) {
+                    const authed = isGoogleAuthed();
+                    const dateStr = formatDate(row.serviceDate);
+                    const actionCell = row.reconciled
+                        ? '<span class="reconciled-badge">✓ Reconciled</span>'
+                        : authed
+                            ? `<button class="btn-reconcile" onclick="markAsReconciled(this, ${row.customerCode}, '${dateStr}')">✓ Mark Reconciled</button>`
+                            : `<button class="btn-reconcile" disabled title="Sign in with Google to enable this">✓ Mark Reconciled</button>`;
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${dateStr}</td>
+                        <td>${row.customerCode}</td>
+                        <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
+                        <td style="color: var(--error); font-weight: 600;">$${(row.expectedPayout || 0).toFixed(2)}</td>
+                        <td>${actionCell}</td>
+                    `;
+                    criticalBody.appendChild(tr);
+                }
+            } else {
+                criticalBanner.classList.remove('show');
+            }
             r.details.sort((a, b) => {
                 function score(row) {
                     if (row.paymentStatus === 'MISMATCH' || row.payoutStatus === 'MISMATCH') return 0;
@@ -2722,14 +3721,179 @@
             renderUnifiedTable();
             renderOrphanCards();
 
+            // Initial state: table visible, orphan cards hidden (shown via "Not Found" tab)
+            document.getElementById('orphanCards').style.display = 'none';
+            document.querySelector('.table-container').style.display = 'block';
+            document.querySelector('.search-bar').style.display = 'flex';
+
             resultsDiv.classList.add('show');
             downloadBtn.style.display = 'inline-flex';
             document.getElementById('resetBtn').style.display = 'inline-flex';
         }
 
         // ============================================================
-        // DOWNLOAD REPORT (two sheets)
+        // TRANSACTIONS VIEWER
         // ============================================================
+        let txSortCol = null;
+        let txSortDir = 'asc';
+        let txRows = [];      // all data rows as objects
+        let txHeaders = [];   // column names in order
+
+        function openTransactionsViewer() {
+            if (!file1Data || file1Data.length === 0) return;
+
+            // Build headers from first row keys, skipping internal _colN keys
+            txHeaders = Object.keys(file1Data[0]).filter(k => !k.startsWith('_col'));
+            txRows = file1Data.filter(row =>
+                Object.values(row).some(v => v !== null && v !== undefined && v !== '')
+            );
+
+            // Render header
+            const thead = document.getElementById('txThead');
+            thead.innerHTML = '';
+            const tr = document.createElement('tr');
+            txHeaders.forEach((col, idx) => {
+                const th = document.createElement('th');
+                th.innerHTML = `${col} <span class="tx-sort-icon">↕</span>`;
+                th.dataset.col = col;
+                th.dataset.idx = idx;
+                th.onclick = () => txSort(col, th);
+                tr.appendChild(th);
+            });
+            thead.appendChild(tr);
+
+            txSortCol = null;
+            txSortDir = 'asc';
+            document.getElementById('txSearchInput').value = '';
+            txRenderBody();
+            updateTxCount();
+
+            document.getElementById('txPanel').classList.add('open');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeTransactionsViewer() {
+            document.getElementById('txPanel').classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        // Close on Escape key
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') closeTransactionsViewer();
+        });
+
+        function txRenderBody() {
+            const query = (document.getElementById('txSearchInput').value || '').trim().toLowerCase();
+            const tbody = document.getElementById('txTbody');
+            tbody.innerHTML = '';
+
+            // Sort a copy
+            let sorted = [...txRows];
+            if (txSortCol) {
+                sorted.sort((a, b) => {
+                    let va = a[txSortCol], vb = b[txSortCol];
+                    // Date objects
+                    if (va instanceof Date && vb instanceof Date) {
+                        return txSortDir === 'asc' ? va - vb : vb - va;
+                    }
+                    // Numbers
+                    const na = parseFloat(va), nb = parseFloat(vb);
+                    if (!isNaN(na) && !isNaN(nb)) {
+                        return txSortDir === 'asc' ? na - nb : nb - na;
+                    }
+                    // Strings
+                    va = va !== null && va !== undefined ? String(va).toLowerCase() : '';
+                    vb = vb !== null && vb !== undefined ? String(vb).toLowerCase() : '';
+                    return txSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+                });
+            }
+
+            let visible = 0;
+            for (const row of sorted) {
+                // Search: match any cell value containing the query
+                if (query) {
+                    const rowText = txHeaders.map(h => {
+                        const v = row[h];
+                        return v !== null && v !== undefined ? String(v).toLowerCase() : '';
+                    }).join(' ');
+                    if (!rowText.includes(query)) continue;
+                }
+
+                visible++;
+                const tr = document.createElement('tr');
+                txHeaders.forEach(col => {
+                    const td = document.createElement('td');
+                    const val = row[col];
+
+                    if (val === null || val === undefined || val === '') {
+                        td.innerHTML = '<span style="color:var(--text-secondary);opacity:0.4;">—</span>';
+                    } else if (val instanceof Date) {
+                        td.textContent = formatDate(val);
+                    } else if (col.toLowerCase().includes('reconcili') && String(val).toUpperCase() === 'YES') {
+                        td.innerHTML = '<span class="tx-yes-badge">✓ YES</span>';
+                    } else if (col.toLowerCase().includes('services') || col.toLowerCase().includes('service')) {
+                        const svc = String(val);
+                        if (svc.toLowerCase().startsWith('missed')) {
+                            td.innerHTML = `<span class="tx-missed-badge">${svc}</span>`;
+                        } else {
+                            td.style.fontFamily = "'DM Sans', sans-serif";
+                            td.textContent = svc;
+                        }
+                    } else if (typeof val === 'number') {
+                        // Format money columns
+                        const colLower = col.toLowerCase();
+                        if (colLower.includes('owed') || colLower.includes('amount') || colLower.includes('total') || colLower.includes('fee')) {
+                            td.textContent = val === 0 ? '$0.00' : '$' + val.toFixed(2);
+                        } else {
+                            td.textContent = val;
+                        }
+                    } else {
+                        td.textContent = val;
+                    }
+
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            }
+
+            updateTxCount(visible, sorted.length);
+        }
+
+        function txSort(col, thEl) {
+            if (txSortCol === col) {
+                txSortDir = txSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                txSortCol = col;
+                txSortDir = 'asc';
+            }
+
+            // Update header styles
+            document.querySelectorAll('.tx-table th').forEach(th => {
+                th.classList.remove('tx-sorted');
+                const icon = th.querySelector('.tx-sort-icon');
+                if (icon) icon.textContent = '↕';
+            });
+            thEl.classList.add('tx-sorted');
+            const icon = thEl.querySelector('.tx-sort-icon');
+            if (icon) icon.textContent = txSortDir === 'asc' ? '↑' : '↓';
+
+            txRenderBody();
+        }
+
+        function txFilter() {
+            txRenderBody();
+        }
+
+        function updateTxCount(visible, total) {
+            const el = document.getElementById('txRowCount');
+            if (visible !== undefined && total !== undefined) {
+                el.textContent = visible === total
+                    ? `${total} transactions`
+                    : `${visible} of ${total} transactions`;
+            } else {
+                el.textContent = `${txRows.length} transactions`;
+            }
+        }
         function downloadReport() {
             const r = reconciliationResults;
             const wb = XLSX.utils.book_new();
@@ -2815,5 +3979,35 @@
             XLSX.writeFile(wb, `Reconciliation_Report_${today}.xlsx`);
         }
     </script>
+    <!-- TRANSACTIONS VIEWER PANEL -->
+    <div class="tx-panel" id="txPanel">
+        <div class="tx-panel-header">
+            <div class="tx-panel-title">
+                <h2>All Transactions</h2>
+                <p id="txRowCount" class="tx-row-count">— rows</p>
+            </div>
+            <div class="tx-panel-controls">
+                <div class="tx-search">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="color:var(--text-secondary);flex-shrink:0">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                    </svg>
+                    <input type="text" id="txSearchInput" placeholder="Search by customer number..." oninput="txFilter()">
+                </div>
+                <button class="tx-close" onclick="closeTransactionsViewer()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                    </svg>
+                    Go Back
+                </button>
+            </div>
+        </div>
+        <div class="tx-panel-body">
+            <table class="tx-table" id="txTable">
+                <thead id="txThead"></thead>
+                <tbody id="txTbody"></tbody>
+            </table>
+        </div>
+    </div>
+
 </body>
 </html>
