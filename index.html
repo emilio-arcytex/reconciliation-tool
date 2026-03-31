@@ -1797,6 +1797,28 @@
         const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
         const SHEET_NAME = 'Sheet1'; // Tab name in the Google Sheet
 
+        // ============================================================
+        // SHEETS API HELPERS — gzip + partial response per Google docs
+        // ============================================================
+        function sheetsHeaders() {
+            return {
+                Authorization: `Bearer ${googleAccessToken}`,
+                'Accept-Encoding': 'gzip',
+                'User-Agent': 'DurhamAutohaus-Reconciliation (gzip)'
+            };
+        }
+
+        // GET values from a range — requests only the `values` field (partial response)
+        async function sheetsGet(range) {
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(range)}?fields=values`;
+            const resp = await fetch(url, { headers: sheetsHeaders() });
+            if (resp.status === 401) { googleAccessToken = null; setAuthState('disconnected'); throw new Error('SESSION_EXPIRED'); }
+            if (resp.status === 403) throw new Error('NO_ACCESS');
+            if (!resp.ok) throw new Error(`SHEETS_ERROR:${resp.status}`);
+            const data = await resp.json();
+            return data.values || [];
+        }
+
         let googleAccessToken = null;
         let googleTokenExpiry = 0;
         let sheetHeaders = null; // cached column headers from the sheet
@@ -1890,13 +1912,8 @@
         // ============================================================
         async function getSheetHeaders() {
             if (sheetHeaders) return sheetHeaders;
-            const resp = await fetch(
-                `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(SHEET_NAME + '!1:1')}`,
-                { headers: { Authorization: `Bearer ${googleAccessToken}` } }
-            );
-            if (!resp.ok) throw new Error('Could not read sheet headers');
-            const data = await resp.json();
-            sheetHeaders = (data.values && data.values[0]) ? data.values[0] : [];
+            const values = await sheetsGet(SHEET_NAME + '!1:1');
+            sheetHeaders = (values && values[0]) ? values[0] : [];
             return sheetHeaders;
         }
 
@@ -1916,22 +1933,8 @@
         }
 
         async function findSheetRow(customerCode, serviceDateStr, transactionId) {
-            const dateKey = serviceDateStr; // already YYYY-MM-DD string
-            const resp = await fetch(
-                `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(SHEET_NAME)}`,
-                { headers: { Authorization: `Bearer ${googleAccessToken}` } }
-            );
-
-            if (resp.status === 401) {
-                googleAccessToken = null;
-                setAuthState('disconnected');
-                throw new Error('SESSION_EXPIRED');
-            }
-            if (resp.status === 403) throw new Error('NO_ACCESS');
-            if (!resp.ok) throw new Error(`SHEETS_ERROR:${resp.status}`);
-
-            const data = await resp.json();
-            const rows = data.values || [];
+            const dateKey = serviceDateStr;
+            const rows = await sheetsGet(SHEET_NAME);
 
             // Find header row
             let headerIdx = -1;
@@ -2049,19 +2052,12 @@
                     `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
                     {
                         method: 'PUT',
-                        headers: {
-                            Authorization: `Bearer ${googleAccessToken}`,
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { ...sheetsHeaders(), 'Content-Type': 'application/json' },
                         body: JSON.stringify({ values: [['YES']] })
                     }
                 );
 
-                if (resp.status === 401) {
-                    googleAccessToken = null;
-                    setAuthState('disconnected');
-                    throw new Error('SESSION_EXPIRED');
-                }
+                if (resp.status === 401) { googleAccessToken = null; setAuthState('disconnected'); throw new Error('SESSION_EXPIRED'); }
                 if (resp.status === 403) throw new Error('NO_ACCESS');
                 if (!resp.ok) {
                     const err = await resp.json().catch(() => ({}));
@@ -2184,16 +2180,7 @@
             // ── Strategy 1: Sheets API (live, no cache) — requires sign-in ──
             if (isGoogleAuthed()) {
                 try {
-                    const resp = await fetch(
-                        `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(SHEET_NAME)}`,
-                        { headers: { Authorization: `Bearer ${googleAccessToken}` } }
-                    );
-                    if (resp.status === 401) { googleAccessToken = null; setAuthState('disconnected'); throw new Error('SESSION_EXPIRED'); }
-                    if (resp.status === 403) throw new Error('NO_ACCESS');
-                    if (!resp.ok) throw new Error(`SHEETS_ERROR:${resp.status}`);
-
-                    const data = await resp.json();
-                    const rows = data.values || [];
+                    const rows = await sheetsGet(SHEET_NAME);
 
                     // Find header row
                     let headerIdx = 0;
@@ -4291,16 +4278,7 @@
             confirmBtn.textContent = 'Saving...';
 
             try {
-                const resp = await fetch(
-                    `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(SHEET_NAME)}`,
-                    { headers: { Authorization: `Bearer ${googleAccessToken}` } }
-                );
-                if (resp.status === 401) { googleAccessToken = null; setAuthState('disconnected'); throw new Error('SESSION_EXPIRED'); }
-                if (resp.status === 403) throw new Error('NO_ACCESS');
-                if (!resp.ok) throw new Error(`SHEETS_ERROR:${resp.status}`);
-
-                const data = await resp.json();
-                const rows = data.values || [];
+                const rows = await sheetsGet(SHEET_NAME);
 
                 let headerIdx = -1;
                 for (let i = 0; i < Math.min(10, rows.length); i++) {
@@ -4344,7 +4322,7 @@
                     `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values:batchUpdate`,
                     {
                         method: 'POST',
-                        headers: { Authorization: `Bearer ${googleAccessToken}`, 'Content-Type': 'application/json' },
+                        headers: { ...sheetsHeaders(), 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             valueInputOption: 'RAW',
                             data: [
