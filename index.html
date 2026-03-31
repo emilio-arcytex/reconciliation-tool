@@ -3521,12 +3521,92 @@
         }
 
         // ============================================================
+        // RENDER CRITICAL BANNER (standalone — called by displayResults and renderOrphanCards)
+        // ============================================================
+        function renderCriticalBanner() {
+            if (!reconciliationResults) return;
+            const r = reconciliationResults;
+            const criticalRows = (r.missedResults || []).filter(row => row.missedStatus === 'CRITICAL' && !row.reconciled);
+            const criticalBanner = document.getElementById('criticalBanner');
+            const criticalBody = document.getElementById('criticalBody');
+            criticalBody.innerHTML = '';
+
+            if (criticalRows.length > 0) {
+                criticalBanner.classList.add('show');
+                document.getElementById('criticalCount').textContent = criticalRows.length;
+
+                const criticalTxOptions = (file1Data || [])
+                    .map(r => {
+                        const idKey   = Object.keys(r).find(k => /transaction.*id/i.test(k));
+                        const custKey = Object.keys(r).find(k => k.includes('Customer No') || k.includes('Customer Code'));
+                        const dateKey = Object.keys(r).find(k => k.toLowerCase().includes('date'));
+                        const svcKey  = Object.keys(r).find(k => k.toLowerCase().includes('services'));
+                        const txId = idKey ? r[idKey] : null;
+                        const cust = custKey ? r[custKey] : '';
+                        const date = dateKey ? formatDate(parseDate(r[dateKey])) : '';
+                        const svc  = svcKey ? (r[svcKey] || '') : '';
+                        return txId ? { txId: String(txId), label: `#${txId} — Cust ${Math.floor(Number(cust))} | ${date} | ${svc}` } : null;
+                    })
+                    .filter(Boolean)
+                    .filter((v, i, arr) => arr.findIndex(x => x.txId === v.txId) === i)
+                    .sort((a, b) => a.txId.localeCompare(b.txId));
+
+                for (const row of criticalRows) {
+                    const authed = isGoogleAuthed();
+                    const dateStr = formatDate(row.serviceDate);
+                    const ownTxId = row.transactionId ? String(row.transactionId) : null;
+                    const rowOptionsHTML = `<option value="">Select transaction...</option>` +
+                        criticalTxOptions
+                            .filter(o => o.txId !== ownTxId)
+                            .map(o => `<option value="${o.txId}">${o.label}</option>`)
+                            .join('');
+
+                    let actionCell;
+                    if (row.reconciled) {
+                        const linked = row.linkedTxId ? ` #${row.linkedTxId}` : '';
+                        actionCell = `<span class="reconciled-row-badge">✓ Reconciled${linked}</span>`;
+                    } else if (authed) {
+                        actionCell = `<div class="link-dropdown-wrap">
+                            <select class="link-select">${rowOptionsHTML}</select>
+                            <button class="btn-link-confirm">Link & Reconcile</button>
+                        </div>`;
+                    } else {
+                        actionCell = `<button class="btn-reconcile" disabled title="Sign in with Google to enable this">Link Record</button>`;
+                    }
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${dateStr}</td>
+                        <td>${row.customerCode}</td>
+                        <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
+                        <td style="color: var(--error); font-weight: 600;">$${(row.expectedPayout || 0).toFixed(2)}</td>
+                        <td>${actionCell}</td>
+                    `;
+
+                    const linkBtn = tr.querySelector('.btn-link-confirm');
+                    if (linkBtn) {
+                        const custCode = row.customerCode;
+                        const txId = row.transactionId || null;
+                        linkBtn.addEventListener('click', function() {
+                            const sel = this.closest('.link-dropdown-wrap').querySelector('.link-select');
+                            linkMissedTransaction(sel, this, custCode, dateStr, txId);
+                        });
+                    }
+                    criticalBody.appendChild(tr);
+                }
+            } else {
+                criticalBanner.classList.remove('show');
+            }
+        }
+
+        // ============================================================
         // RENDER ORPHAN CARDS
         // ============================================================
         function renderOrphanCards() {
             const r = reconciliationResults;
 
-            // Card 0: Missed Appointments
+            // Always refresh the critical banner too
+            renderCriticalBanner();
             const missedRows = r.missedResults || [];
             const cardMissed = document.getElementById('cardMissed');
             const bodyMissed = document.getElementById('missedBody');
@@ -3829,86 +3909,9 @@
             document.getElementById('tabCountNotFound').textContent = notFoundRows.length;
             document.getElementById('tabCountMissed').textContent = (r.missedResults || []).filter(r => !r.reconciled).length;
 
-            // Critical banner — unpaid missed appointments (in our sheet, not in SSC)
-            const criticalRows = (r.missedResults || []).filter(row => row.missedStatus === 'CRITICAL' && !row.reconciled);
-            const criticalBanner = document.getElementById('criticalBanner');
-            const criticalBody = document.getElementById('criticalBody');
-            criticalBody.innerHTML = '';
+            // Critical banner — rendered by its own function so it can be refreshed independently
+            renderCriticalBanner();
 
-            if (criticalRows.length > 0) {
-                criticalBanner.classList.add('show');
-                document.getElementById('criticalCount').textContent = criticalRows.length;
-
-                // Build dropdown options for the critical banner too
-                const criticalTxOptions = (file1Data || [])
-                    .map(r => {
-                        const idKey   = Object.keys(r).find(k => /transaction.*id/i.test(k));
-                        const custKey = Object.keys(r).find(k => k.includes('Customer No') || k.includes('Customer Code'));
-                        const dateKey = Object.keys(r).find(k => k.toLowerCase().includes('date'));
-                        const svcKey  = Object.keys(r).find(k => k.toLowerCase().includes('services'));
-                        const txId = idKey ? r[idKey] : null;
-                        const cust = custKey ? r[custKey] : '';
-                        const date = dateKey ? formatDate(parseDate(r[dateKey])) : '';
-                        const svc  = svcKey ? (r[svcKey] || '') : '';
-                        return txId ? { txId: String(txId), label: `#${txId} — Cust ${Math.floor(Number(cust))} | ${date} | ${svc}` } : null;
-                    })
-                    .filter(Boolean)
-                    .filter((v, i, arr) => arr.findIndex(x => x.txId === v.txId) === i)
-                    .sort((a, b) => a.txId.localeCompare(b.txId));
-
-                const criticalOptionsHTML = `<option value="">Select transaction...</option>` +
-                    criticalTxOptions.map(o => `<option value="${o.txId}">${o.label}</option>`).join('');
-
-                for (const row of criticalRows) {
-                    const authed = isGoogleAuthed();
-                    const dateStr = formatDate(row.serviceDate);
-                    const ownTxId = row.transactionId ? String(row.transactionId) : null;
-
-                    // Build options excluding this row's own ID
-                    const criticalRowOptionsHTML = `<option value="">Select transaction...</option>` +
-                        criticalTxOptions
-                            .filter(o => o.txId !== ownTxId)
-                            .map(o => `<option value="${o.txId}">${o.label}</option>`)
-                            .join('');
-
-                    let actionCell;
-                    if (row.reconciled) {
-                        const linked = row.linkedTxId ? ` #${row.linkedTxId}` : '';
-                        actionCell = `<span class="reconciled-row-badge">✓ Reconciled${linked}</span>`;
-                    } else if (authed) {
-                        actionCell = `<div class="link-dropdown-wrap">
-                            <select class="link-select">${criticalRowOptionsHTML}</select>
-                            <button class="btn-link-confirm">Link & Reconcile</button>
-                        </div>`;
-                    } else {
-                        actionCell = `<button class="btn-reconcile" disabled title="Sign in with Google to enable this">Link Record</button>`;
-                    }
-
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${dateStr}</td>
-                        <td>${row.customerCode}</td>
-                        <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
-                        <td style="color: var(--error); font-weight: 600;">$${(row.expectedPayout || 0).toFixed(2)}</td>
-                        <td>${actionCell}</td>
-                    `;
-
-                    // Wire up via event listener
-                    const linkBtn = tr.querySelector('.btn-link-confirm');
-                    if (linkBtn) {
-                        const custCode = row.customerCode;
-                        const txId = row.transactionId || null;
-                        linkBtn.addEventListener('click', function() {
-                            const sel = this.closest('.link-dropdown-wrap').querySelector('.link-select');
-                            linkMissedTransaction(sel, this, custCode, dateStr, txId);
-                        });
-                    }
-
-                    criticalBody.appendChild(tr);
-                }
-            } else {
-                criticalBanner.classList.remove('show');
-            }
             r.details.sort((a, b) => {
                 function score(row) {
                     if (row.paymentStatus === 'MISMATCH' || row.payoutStatus === 'MISMATCH') return 0;
@@ -4237,12 +4240,29 @@
                 const td = confirmBtn.closest('td');
                 td.innerHTML = `<span class="reconciled-row-badge">✓ Linked #${selectedTxId}</span>`;
 
-                // Update in memory
-                const missedRow = reconciliationResults.missedResults.find(r =>
-                    (transactionId && r.transactionId && String(r.transactionId) === String(transactionId)) ||
-                    (r.customerCode === customerCode && formatDate(r.serviceDate) === serviceDateStr)
-                );
-                if (missedRow) { missedRow.reconciled = true; missedRow.linkedTxId = selectedTxId; }
+                // Update in memory — find the matching missed row
+                const missedRow = reconciliationResults.missedResults.find(r => {
+                    // Match by transaction ID if available
+                    if (transactionId && r.transactionId &&
+                        String(r.transactionId).trim() === String(transactionId).trim()) return true;
+                    // Match by customer code + date string
+                    if (r.customerCode === customerCode &&
+                        formatDate(r.serviceDate) === serviceDateStr) return true;
+                    // Match by customer code + date string (handle number/string mismatch)
+                    if (String(r.customerCode) === String(customerCode) &&
+                        formatDate(r.serviceDate) === serviceDateStr) return true;
+                    return false;
+                });
+                if (missedRow) {
+                    missedRow.reconciled = true;
+                    missedRow.linkedTxId = selectedTxId;
+                } else {
+                    // Fallback: mark by customer code alone if only one critical row for that customer
+                    const fallback = reconciliationResults.missedResults.find(r =>
+                        String(r.customerCode) === String(customerCode) && r.missedStatus === 'CRITICAL'
+                    );
+                    if (fallback) { fallback.reconciled = true; fallback.linkedTxId = selectedTxId; }
+                }
 
                 sheetHeaders = null;
 
