@@ -3576,20 +3576,23 @@
                     if (row.reconciled) {
                         const linked = row.linkedTxId ? ` #${row.linkedTxId}` : '';
                         actionCell = `<span class="reconciled-row-badge">✓ Reconciled${linked}</span>`;
-                    } else if (row.missedStatus === 'SSC_ONLY') {
-                        // Dropdown to link to a transaction record
+                    } else if (row.missedStatus === 'SSC_ONLY' || row.missedStatus === 'CRITICAL') {
+                        // Both SSC_ONLY and CRITICAL need a link dropdown:
+                        // SSC_ONLY = SSC has it, we don't → link to our record
+                        // CRITICAL = we have it, SSC hasn't paid → link to our record and mark done once chased
                         if (authed) {
+                            const linkLabel = row.missedStatus === 'CRITICAL' ? 'Link & Reconcile' : 'Link';
                             actionCell = `<div class="link-dropdown-wrap">
                                 <select class="link-select" id="lnk-${row.customerCode}-${dateStr}">${optionsHTML}</select>
                                 <button class="btn-link-confirm" onclick="linkMissedTransaction(
                                     document.getElementById('lnk-${row.customerCode}-${dateStr}'),
                                     this, ${row.customerCode}, '${dateStr}', ${txIdJson}
-                                )">Link</button>
+                                )">${linkLabel}</button>
                             </div>`;
                         } else {
                             actionCell = `<button class="btn-reconcile" disabled title="Sign in with Google to enable this">Link Record</button>`;
                         }
-                    } else if (row.missedStatus === 'MATCHED' || row.missedStatus === 'CRITICAL') {
+                    } else if (row.missedStatus === 'MATCHED') {
                         actionCell = authed
                             ? `<button class="btn-reconcile" onclick="markAsReconciled(this, ${row.customerCode}, '${dateStr}', ${txIdJson})">✓ Mark Reconciled</button>`
                             : `<button class="btn-reconcile" disabled title="Sign in with Google to enable this">✓ Mark Reconciled</button>`;
@@ -3812,14 +3815,48 @@
             if (criticalRows.length > 0) {
                 criticalBanner.classList.add('show');
                 document.getElementById('criticalCount').textContent = criticalRows.length;
+
+                // Build dropdown options for the critical banner too
+                const criticalTxOptions = (file1Data || [])
+                    .map(r => {
+                        const idKey  = Object.keys(r).find(k => /^transaction\s*id$/i.test(k));
+                        const custKey = Object.keys(r).find(k => k.includes('Customer No') || k.includes('Customer Code'));
+                        const dateKey = Object.keys(r).find(k => k.toLowerCase().includes('date'));
+                        const svcKey  = Object.keys(r).find(k => k.toLowerCase().includes('services'));
+                        const txId = idKey ? r[idKey] : null;
+                        const cust = custKey ? r[custKey] : '';
+                        const date = dateKey ? formatDate(parseDate(r[dateKey])) : '';
+                        const svc  = svcKey ? (r[svcKey] || '') : '';
+                        return txId ? { txId: String(txId), label: `#${txId} — Cust ${Math.floor(Number(cust))} | ${date} | ${svc}` } : null;
+                    })
+                    .filter(Boolean)
+                    .filter((v, i, arr) => arr.findIndex(x => x.txId === v.txId) === i)
+                    .sort((a, b) => a.txId.localeCompare(b.txId));
+
+                const criticalOptionsHTML = `<option value="">Select transaction...</option>` +
+                    criticalTxOptions.map(o => `<option value="${o.txId}">${o.label}</option>`).join('');
+
                 for (const row of criticalRows) {
                     const authed = isGoogleAuthed();
                     const dateStr = formatDate(row.serviceDate);
-                    const actionCell = row.reconciled
-                        ? '<span class="reconciled-badge">✓ Reconciled</span>'
-                        : authed
-                            ? `<button class="btn-reconcile" onclick="markAsReconciled(this, ${row.customerCode}, '${dateStr}', ${JSON.stringify(row.transactionId || null)})">✓ Mark Reconciled</button>`
-                            : `<button class="btn-reconcile" disabled title="Sign in with Google to enable this">✓ Mark Reconciled</button>`;
+                    const txIdJson = JSON.stringify(row.transactionId || null);
+
+                    let actionCell;
+                    if (row.reconciled) {
+                        const linked = row.linkedTxId ? ` #${row.linkedTxId}` : '';
+                        actionCell = `<span class="reconciled-row-badge">✓ Reconciled${linked}</span>`;
+                    } else if (authed) {
+                        actionCell = `<div class="link-dropdown-wrap">
+                            <select class="link-select" id="clnk-${row.customerCode}-${dateStr}">${criticalOptionsHTML}</select>
+                            <button class="btn-link-confirm" onclick="linkMissedTransaction(
+                                document.getElementById('clnk-${row.customerCode}-${dateStr}'),
+                                this, ${row.customerCode}, '${dateStr}', ${txIdJson}
+                            )">Link & Reconcile</button>
+                        </div>`;
+                    } else {
+                        actionCell = `<button class="btn-reconcile" disabled title="Sign in with Google to enable this">Link Record</button>`;
+                    }
+
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td>${dateStr}</td>
