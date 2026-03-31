@@ -1365,6 +1365,71 @@
             font-weight: 600;
         }
 
+        /* Reconciled row styling — greyed out, sorted to bottom */
+        .row-reconciled td {
+            opacity: 0.45;
+        }
+
+        .row-reconciled td:last-child,
+        .row-reconciled td:nth-last-child(2) {
+            opacity: 1; /* keep action/status columns readable */
+        }
+
+        .reconciled-row-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            background: var(--success-bg);
+            color: var(--success);
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            font-family: 'DM Sans', sans-serif;
+            white-space: nowrap;
+        }
+
+        /* Link transaction dropdown */
+        .link-dropdown-wrap {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .link-select {
+            flex: 1;
+            padding: 5px 10px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-family: 'JetBrains Mono', monospace;
+            cursor: pointer;
+            max-width: 180px;
+        }
+
+        .link-select:focus { outline: none; border-color: var(--accent); }
+
+        .btn-link-confirm {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 10px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.2s;
+        }
+
+        .btn-link-confirm:hover:not(:disabled) { background: var(--accent-hover); }
+        .btn-link-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
+
         .tx-missed-badge {
             display: inline-block;
             padding: 2px 8px;
@@ -1596,6 +1661,7 @@
                                     <th>Difference</th>
                                     <th>Status</th>
                                     <th style="width: 40px; text-align: center;">Proof</th>
+                                    <th style="width: 130px;">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="reconTableBody"></tbody>
@@ -1891,16 +1957,13 @@
                 }
             }
 
-            // Strategy 2: fallback — match by customer + date + missed service type
+            // Strategy 2: fallback — match by customer + date (for any row type)
             for (let i = headerIdx + 1; i < rows.length; i++) {
                 const row = rows[i];
                 const rowCust = row[custColIdx] ? String(Math.floor(Number(row[custColIdx]))) : '';
                 const rowDate = row[dateColIdx] ? formatDate(parseDate(row[dateColIdx])) : '';
-                const rowSvc  = row[svcColIdx]  ? String(row[svcColIdx]).toLowerCase() : '';
 
-                if (rowCust === String(customerCode) &&
-                    rowDate === dateKey &&
-                    rowSvc.startsWith('missed')) {
+                if (rowCust === String(customerCode) && rowDate === dateKey) {
                     return { rowNumber: i + 1, reconColIdx, reconColLetter };
                 }
             }
@@ -2006,6 +2069,16 @@
                     (r.customerCode === customerCode && formatDate(r.serviceDate) === serviceDateStr)
                 );
                 if (missedRow) missedRow.reconciled = true;
+
+                const mainRow = reconciliationResults.details.find(r =>
+                    (transactionId && r.transactionId && String(r.transactionId) === String(transactionId)) ||
+                    (r.customerCode === customerCode && formatDate(r.serviceDate) === serviceDateStr)
+                );
+                if (mainRow) {
+                    mainRow.reconciled = true;
+                    // Re-render main table to show greyed state immediately
+                    renderUnifiedTable();
+                }
 
                 sheetHeaders = null;
                 showToast(`Customer ${customerCode} marked as reconciled ✓`, 'success');
@@ -2567,7 +2640,7 @@
 
             // Find Proof of Payment column
             const proofCol = findColumnByPattern(data, /proof.*payment/i);
-            // Find "Missed Service Reconciliated?" column
+            // Find "Missed Service Reconciliated?" column (used for all rows)
             const reconCol = findColumnByPattern(data, /missed.*reconcili/i);
             // Find "Transaction ID" column
             const txIdCol = findColumnByPattern(data, /^transaction\s*id$/i);
@@ -2576,8 +2649,7 @@
                 const custRaw = row[customerCol];
                 if (custRaw === null || custRaw === undefined || custRaw === '' || isNaN(Number(custRaw)) || Number(custRaw) <= 0) continue;
 
-                // Skip rows already marked as reconciled
-                if (reconCol && row[reconCol] && String(row[reconCol]).trim().toUpperCase() === 'YES') continue;
+                const isReconciled = reconCol && row[reconCol] && String(row[reconCol]).trim().toUpperCase() === 'YES';
 
                 const cust = Math.floor(Number(custRaw));
                 const d = parseDate(row[dateCol]);
@@ -2588,10 +2660,11 @@
                 const transactionId = txIdCol ? (row[txIdCol] || null) : null;
 
                 if (entries[key]) {
-                    // Same customer, same date — sum the amounts
                     entries[key].owed += parseFloat(row[owedCol]) || 0;
                     if (proofUrl && !entries[key].proofUrl) entries[key].proofUrl = proofUrl;
                     if (transactionId && !entries[key].transactionId) entries[key].transactionId = transactionId;
+                    // If any sub-row is NOT reconciled, the whole entry is unreconciled
+                    if (!isReconciled) entries[key].reconciled = false;
                 } else {
                     entries[key] = {
                         customer: cust,
@@ -2599,7 +2672,8 @@
                         owed: parseFloat(row[owedCol]) || 0,
                         service: servicesCol ? (row[servicesCol] || '') : '',
                         proofUrl: proofUrl,
-                        transactionId: transactionId
+                        transactionId: transactionId,
+                        reconciled: isReconciled
                     };
                 }
             }
@@ -3060,7 +3134,9 @@
                             expectedPayout: 0,
                             payoutDiff: null,
                             payoutStatus: '-',
-                            proofUrl: entry.proofUrl || null
+                            proofUrl: entry.proofUrl || null,
+                            transactionId: entry.transactionId || null,
+                            reconciled: entry.reconciled || false
                         });
                         notFoundInF2++;
                     }
@@ -3166,12 +3242,15 @@
                             expectedPayout,
                             payoutDiff,
                             payoutStatus,
-                            proofUrl: f1.proofUrl || null
+                            proofUrl: f1.proofUrl || null,
+                            transactionId: f1.transactionId || null,
+                            reconciled: f1.reconciled || false
                         });
                     }
 
-                    // Sort: mismatches first, then not found, then matches
+                    // Sort: reconciled last, then mismatches, not found, matches
                     results.sort((a, b) => {
+                        if (a.reconciled !== b.reconciled) return a.reconciled ? 1 : -1;
                         const order = {
                             'MISMATCH': 0,
                             'NOT FOUND in SSC Payroll': 1,
@@ -3363,15 +3442,31 @@
                 const isEven = groupIndex % 2 === 0;
                 const groupClass = isEven ? 'group-even' : '';
                 const hasPayout = row.sscPayout !== undefined;
-                const warnings = detectWarnings(row);
+                const warnings = row.reconciled ? [] : detectWarnings(row);
                 const warningsHTML = renderWarningsHTML(warnings);
+                const reconClass = row.reconciled ? 'row-reconciled' : '';
 
                 const payStatusClass = row.paymentStatus === 'MATCH' ? 'status-match' :
                                        row.paymentStatus === 'MISMATCH' ? 'status-mismatch' : 'status-notfound';
 
+                // Action cell — mark reconciled button for mismatches, badge if already reconciled
+                const isMismatch = row.paymentStatus === 'MISMATCH' || row.payoutStatus === 'MISMATCH';
+                const dateStr = formatDate(row.serviceDate);
+                let actionCell;
+                if (row.reconciled) {
+                    actionCell = '<span class="reconciled-row-badge">✓ Reconciled</span>';
+                } else if (isMismatch) {
+                    const authed = isGoogleAuthed();
+                    actionCell = authed
+                        ? `<button class="btn-reconcile" onclick="markAsReconciled(this, ${row.customerCode}, '${dateStr}', ${JSON.stringify(row.transactionId || null)})">✓ Mark Reconciled</button>`
+                        : `<button class="btn-reconcile" disabled title="Sign in with Google to enable this">✓ Mark Reconciled</button>`;
+                } else {
+                    actionCell = '';
+                }
+
                 if (hasPayout) {
                     const tr1 = document.createElement('tr');
-                    tr1.className = `row-payment ${groupClass}`;
+                    tr1.className = `row-payment ${groupClass} ${reconClass}`;
                     tr1.innerHTML = `
                         <td rowspan="2" style="width: 36px; padding: 8px;">${warningsHTML}</td>
                         <td rowspan="2">${formatDate(row.serviceDate)}</td>
@@ -3383,11 +3478,12 @@
                         <td class="${row.paymentDiff > 0 ? 'diff-positive' : row.paymentDiff < 0 ? 'diff-negative' : ''}">${row.paymentDiff !== null ? '$' + row.paymentDiff.toFixed(2) : '-'}</td>
                         <td><span class="status-badge ${payStatusClass}">${row.paymentStatus}</span></td>
                         <td rowspan="2" style="text-align: center;">${proofIconHTML(row.proofUrl)}</td>
+                        <td rowspan="2">${actionCell}</td>
                     `;
                     tbody.appendChild(tr1);
 
                     const tr2 = document.createElement('tr');
-                    tr2.className = `row-payout row-group-end ${groupClass}`;
+                    tr2.className = `row-payout row-group-end ${groupClass} ${reconClass}`;
                     const payoutStatusClass = row.payoutStatus === 'MATCH' ? 'status-match' :
                                               row.payoutStatus === 'MISMATCH' ? 'status-mismatch' : 'status-notfound';
                     tr2.innerHTML = `
@@ -3400,7 +3496,7 @@
                     tbody.appendChild(tr2);
                 } else {
                     const tr = document.createElement('tr');
-                    tr.className = `row-single ${groupClass}`;
+                    tr.className = `row-single ${groupClass} ${reconClass}`;
                     tr.innerHTML = `
                         <td style="width: 36px; padding: 8px;">${warningsHTML}</td>
                         <td>${formatDate(row.serviceDate)}</td>
@@ -3412,6 +3508,7 @@
                         <td class="${row.paymentDiff > 0 ? 'diff-positive' : row.paymentDiff < 0 ? 'diff-negative' : ''}">${row.paymentDiff !== null ? '$' + row.paymentDiff.toFixed(2) : '-'}</td>
                         <td><span class="status-badge ${payStatusClass}">${row.paymentStatus}</span></td>
                         <td style="text-align: center;">${proofIconHTML(row.proofUrl)}</td>
+                        <td>${actionCell}</td>
                     `;
                     tbody.appendChild(tr);
                 }
@@ -3435,35 +3532,73 @@
             if (missedRows.length > 0) {
                 cardMissed.style.display = 'block';
                 document.getElementById('countMissed').textContent = missedRows.length;
+
+                // Build dropdown options from all F1 transaction IDs for linking
+                const txOptions = (file1Data || [])
+                    .map(r => {
+                        const idKey = Object.keys(r).find(k => /^transaction\s*id$/i.test(k));
+                        const custKey = Object.keys(r).find(k => k.includes('Customer No') || k.includes('Customer Code'));
+                        const dateKey = Object.keys(r).find(k => k.toLowerCase().includes('date'));
+                        const svcKey  = Object.keys(r).find(k => k.toLowerCase().includes('services'));
+                        const txId = idKey ? r[idKey] : null;
+                        const cust = custKey ? r[custKey] : '';
+                        const date = dateKey ? formatDate(parseDate(r[dateKey])) : '';
+                        const svc  = svcKey ? (r[svcKey] || '') : '';
+                        return txId ? { txId: String(txId), label: `#${txId} — Cust ${Math.floor(Number(cust))} | ${date} | ${svc}` } : null;
+                    })
+                    .filter(Boolean)
+                    .filter((v, i, arr) => arr.findIndex(x => x.txId === v.txId) === i) // dedupe
+                    .sort((a, b) => a.txId.localeCompare(b.txId));
+
+                const optionsHTML = `<option value="">Select transaction...</option>` +
+                    txOptions.map(o => `<option value="${o.txId}">${o.label}</option>`).join('');
+
                 for (const row of missedRows) {
                     // Status badge
                     let missedBadge;
                     if (row.missedStatus === 'CRITICAL') {
                         missedBadge = '<span class="status-badge status-mismatch">🚨 UNPAID</span>';
                     } else if (row.missedStatus === 'SSC_ONLY') {
-                        missedBadge = `<span class="status-badge status-notfound">SSC ONLY</span>`;
+                        missedBadge = '<span class="status-badge status-notfound">SSC ONLY</span>';
                     } else {
                         const sc = row.payoutStatus === 'MATCH' ? 'status-match' : 'status-mismatch';
                         missedBadge = `<span class="status-badge ${sc}">${row.payoutStatus}</span>`;
                     }
 
-                    // Action cell — only for MATCHED and CRITICAL rows (both exist in F1)
+                    const authed = isGoogleAuthed();
+                    const dateStr = formatDate(row.serviceDate);
+                    const txIdJson = JSON.stringify(row.transactionId || null);
+
+                    // Action cell logic
                     let actionCell;
                     if (row.reconciled) {
-                        actionCell = '<span class="reconciled-badge">✓ Reconciled</span>';
+                        const linked = row.linkedTxId ? ` #${row.linkedTxId}` : '';
+                        actionCell = `<span class="reconciled-row-badge">✓ Reconciled${linked}</span>`;
+                    } else if (row.missedStatus === 'SSC_ONLY') {
+                        // Dropdown to link to a transaction record
+                        if (authed) {
+                            actionCell = `<div class="link-dropdown-wrap">
+                                <select class="link-select" id="lnk-${row.customerCode}-${dateStr}">${optionsHTML}</select>
+                                <button class="btn-link-confirm" onclick="linkMissedTransaction(
+                                    document.getElementById('lnk-${row.customerCode}-${dateStr}'),
+                                    this, ${row.customerCode}, '${dateStr}', ${txIdJson}
+                                )">Link</button>
+                            </div>`;
+                        } else {
+                            actionCell = `<button class="btn-reconcile" disabled title="Sign in with Google to enable this">Link Record</button>`;
+                        }
                     } else if (row.missedStatus === 'MATCHED' || row.missedStatus === 'CRITICAL') {
-                        const authed = isGoogleAuthed();
-                        const dateStr = formatDate(row.serviceDate);
                         actionCell = authed
-                            ? `<button class="btn-reconcile" onclick="markAsReconciled(this, ${row.customerCode}, '${dateStr}', ${JSON.stringify(row.transactionId || null)})">✓ Mark Reconciled</button>`
+                            ? `<button class="btn-reconcile" onclick="markAsReconciled(this, ${row.customerCode}, '${dateStr}', ${txIdJson})">✓ Mark Reconciled</button>`
                             : `<button class="btn-reconcile" disabled title="Sign in with Google to enable this">✓ Mark Reconciled</button>`;
                     } else {
                         actionCell = '<span style="color:var(--text-secondary);font-size:0.75rem;">—</span>';
                     }
 
                     const tr = document.createElement('tr');
+                    tr.className = row.reconciled ? 'row-reconciled' : '';
                     tr.innerHTML = `
-                        <td>${formatDate(row.serviceDate)}</td>
+                        <td>${dateStr}</td>
                         <td>${row.customerCode}</td>
                         <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
                         <td>${row.sscPayout !== undefined ? '$' + row.sscPayout.toFixed(2) : '-'}</td>
@@ -3935,6 +4070,118 @@
                 el.textContent = `${txRows.length} transactions`;
             }
         }
+        }
+
+        // ============================================================
+        // LINK MISSED APPOINTMENT TO A TRANSACTION RECORD
+        // ============================================================
+        async function linkMissedTransaction(selectEl, confirmBtn, customerCode, serviceDateStr, transactionId) {
+            const selectedTxId = selectEl.value;
+            if (!selectedTxId) return;
+
+            if (!isGoogleAuthed()) {
+                showToast('Sign in with Google first to enable write-back', 'error');
+                return;
+            }
+
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Saving...';
+
+            try {
+                const resp = await fetch(
+                    `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(SHEET_NAME)}`,
+                    { headers: { Authorization: `Bearer ${googleAccessToken}` } }
+                );
+                if (resp.status === 401) { googleAccessToken = null; setAuthState('disconnected'); throw new Error('SESSION_EXPIRED'); }
+                if (resp.status === 403) throw new Error('NO_ACCESS');
+                if (!resp.ok) throw new Error(`SHEETS_ERROR:${resp.status}`);
+
+                const data = await resp.json();
+                const rows = data.values || [];
+
+                let headerIdx = -1;
+                for (let i = 0; i < Math.min(10, rows.length); i++) {
+                    if (rows[i].some(c => c && (c.includes('Customer No') || c.includes('Customer Code')))) {
+                        headerIdx = i; break;
+                    }
+                }
+                if (headerIdx === -1) throw new Error('HEADER_NOT_FOUND');
+
+                const headers = rows[headerIdx];
+                const reconColIdx  = headers.findIndex(h => h && h.includes('Missed Service Reconciliated'));
+                const linkedColIdx = headers.findIndex(h => h && /linked.*transaction/i.test(h));
+                const txIdColIdx   = headers.findIndex(h => h && /^transaction\s*id$/i.test(h.trim()));
+                const custColIdx   = headers.findIndex(h => h && (h.includes('Customer No') || h.includes('Customer Code')));
+                const dateColIdx   = headers.findIndex(h => h && h.toLowerCase().includes('date'));
+
+                if (reconColIdx === -1) throw new Error('RECON_COL_NOT_FOUND');
+                if (linkedColIdx === -1) throw new Error('LINKED_COL_NOT_FOUND');
+
+                // Find target row — Transaction ID first, then customer+date fallback
+                let targetRowNum = -1;
+                if (transactionId && txIdColIdx !== -1) {
+                    for (let i = headerIdx + 1; i < rows.length; i++) {
+                        const rowTxId = rows[i][txIdColIdx] ? String(rows[i][txIdColIdx]).trim() : '';
+                        if (rowTxId === String(transactionId).trim()) { targetRowNum = i + 1; break; }
+                    }
+                }
+                if (targetRowNum === -1) {
+                    for (let i = headerIdx + 1; i < rows.length; i++) {
+                        const rowCust = rows[i][custColIdx] ? String(Math.floor(Number(rows[i][custColIdx]))) : '';
+                        const rowDate = rows[i][dateColIdx] ? formatDate(parseDate(rows[i][dateColIdx])) : '';
+                        if (rowCust === String(customerCode) && rowDate === serviceDateStr) { targetRowNum = i + 1; break; }
+                    }
+                }
+                if (targetRowNum === -1) throw new Error(`Row not found for customer ${customerCode} on ${serviceDateStr}`);
+
+                const reconLetter  = colIndexToLetter(reconColIdx);
+                const linkedLetter = colIndexToLetter(linkedColIdx);
+
+                const batchResp = await fetch(
+                    `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values:batchUpdate`,
+                    {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${googleAccessToken}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            valueInputOption: 'RAW',
+                            data: [
+                                { range: `${SHEET_NAME}!${reconLetter}${targetRowNum}`,  values: [['YES']] },
+                                { range: `${SHEET_NAME}!${linkedLetter}${targetRowNum}`, values: [[selectedTxId]] }
+                            ]
+                        })
+                    }
+                );
+
+                if (batchResp.status === 401) { googleAccessToken = null; setAuthState('disconnected'); throw new Error('SESSION_EXPIRED'); }
+                if (batchResp.status === 403) throw new Error('NO_ACCESS');
+                if (!batchResp.ok) { const e = await batchResp.json().catch(() => ({})); throw new Error(e.error?.message || `SHEETS_ERROR:${batchResp.status}`); }
+
+                // Update UI
+                const td = confirmBtn.closest('td');
+                td.innerHTML = `<span class="reconciled-row-badge">✓ Linked #${selectedTxId}</span>`;
+
+                // Update in memory
+                const missedRow = reconciliationResults.missedResults.find(r =>
+                    (transactionId && r.transactionId && String(r.transactionId) === String(transactionId)) ||
+                    (r.customerCode === customerCode && formatDate(r.serviceDate) === serviceDateStr)
+                );
+                if (missedRow) { missedRow.reconciled = true; missedRow.linkedTxId = selectedTxId; }
+
+                sheetHeaders = null;
+                showToast(`Linked to Transaction #${selectedTxId} ✓`, 'success');
+
+            } catch (e) {
+                const msg = e.message || '';
+                const text = msg === 'LINKED_COL_NOT_FOUND'
+                    ? 'Column "Linked Transaction Record" not found in sheet. Please add it and try again.'
+                    : getFriendlyError(e, customerCode, serviceDateStr).text;
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Link';
+                showToast(text, 'error');
+                if (msg === 'SESSION_EXPIRED') setTimeout(handleGoogleSignIn, 1000);
+            }
+        }
+
         function downloadReport() {
             const r = reconciliationResults;
             const wb = XLSX.utils.book_new();
