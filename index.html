@@ -2962,14 +2962,20 @@
                         return svcs.length > 0 && svcs.every(s => (s.type || s).toLowerCase().startsWith('missed'));
                     }
 
-                    // Split F1 into missed and normal
-                    // Reconciled missed rows are excluded entirely — they're settled
+                    // Missed F1 entries bypass the date range filter entirely —
+                    // they must stay visible across all future reconciliations until
+                    // explicitly marked as reconciled, even if the appointment date
+                    // falls outside the current payroll period.
                     const f1Missed = {}, f1Normal = {};
-                    for (const [key, entry] of Object.entries(f1Filtered)) {
+                    for (const [key, entry] of Object.entries(f1All)) {
                         if (isMissedF1(entry)) {
+                            // Only skip if already reconciled
                             if (!entry.reconciled) f1Missed[key] = entry;
-                            // reconciled missed rows are silently dropped — already settled
-                        } else {
+                        }
+                        // Normal entries are handled via f1Filtered below
+                    }
+                    for (const [key, entry] of Object.entries(f1Filtered)) {
+                        if (!isMissedF1(entry)) {
                             f1Normal[key] = entry;
                         }
                     }
