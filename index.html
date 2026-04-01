@@ -1559,6 +1559,7 @@
                                 <th>Date</th>
                                 <th>Customer</th>
                                 <th>Type</th>
+                                <th>Logged</th>
                                 <th>Expected Payout</th>
                                 <th>Action</th>
                             </tr>
@@ -1695,6 +1696,7 @@
                                     <th>Date</th>
                                     <th>Customer</th>
                                     <th>Type</th>
+                                    <th>Logged</th>
                                     <th>SSC Payout</th>
                                     <th>Expected</th>
                                     <th>Difference</th>
@@ -1773,6 +1775,7 @@
             'Violation Reset': 20,
             'Unlock Code': 20,
             'Unscheduled Service': 20,
+            'Pressure Adjustment': 20,
             'Removal': 30,
             'Missed Install': 50,
             'Missed Service': 20,
@@ -3051,6 +3054,9 @@
                             serviceSummary[svcName].count++;
                             serviceSummary[svcName].total += PAYOUT_RATES[svcName] || 0;
                         }
+                        // Check if the logged Owed in the sheet matches PAYOUT_RATES
+                        const loggedOwed = f1 ? Math.abs(f1.owed || 0) : null;
+                        const loggedOwedMismatch = loggedOwed !== null && Math.abs(loggedOwed - expectedPayout) > 0.01;
                         missedResults.push({
                             serviceDate: f1 ? f1.date : f2.date,
                             customerCode: f1 ? f1.customer : f2.customer,
@@ -3058,6 +3064,8 @@
                             servicesDisplay: formatServices(servicesList) || (f1 ? f1.service : '-'),
                             sscPayout: f2.payout,
                             expectedPayout,
+                            loggedOwed,
+                            loggedOwedMismatch,
                             payoutDiff: isMatch ? 0 : payoutDiff,
                             payoutStatus: isMatch ? 'MATCH' : 'MISMATCH',
                             missedStatus: 'MATCHED'
@@ -3084,6 +3092,8 @@
                         if (expectedPayout && serviceSummary[entry.service] === undefined) {
                             serviceSummary[entry.service] = { count: 0, total: 0 };
                         }
+                        const loggedOwed = Math.abs(entry.owed || 0);
+                        const loggedOwedMismatch = loggedOwed > 0 && Math.abs(loggedOwed - expectedPayout) > 0.01;
                         missedResults.push({
                             serviceDate: entry.date,
                             customerCode: entry.customer,
@@ -3091,6 +3101,8 @@
                             servicesDisplay: entry.service || 'Missed',
                             sscPayout: undefined,
                             expectedPayout,
+                            loggedOwed,
+                            loggedOwedMismatch,
                             payoutDiff: null,
                             payoutStatus: 'CRITICAL',
                             missedStatus: 'CRITICAL'
@@ -3685,10 +3697,16 @@
                     }
 
                     const tr = document.createElement('tr');
+                    const loggedCell = row.loggedOwed
+                        ? (row.loggedOwedMismatch
+                            ? `<span style="color:var(--warning);font-weight:600;" title="Logged $${row.loggedOwed.toFixed(2)} but PAYOUT_RATES expects $${row.expectedPayout.toFixed(2)} — check the logged amount">⚠ $${row.loggedOwed.toFixed(2)}</span>`
+                            : `$${row.loggedOwed.toFixed(2)}`)
+                        : '—';
                     tr.innerHTML = `
                         <td>${dateStr}</td>
                         <td>${row.customerCode}</td>
                         <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
+                        <td>${loggedCell}</td>
                         <td style="color: var(--error); font-weight: 600;">$${(row.expectedPayout || 0).toFixed(2)}</td>
                         <td>${actionCell}</td>
                     `;
@@ -3794,10 +3812,19 @@
 
                     const tr = document.createElement('tr');
                     tr.className = row.reconciled ? 'row-reconciled' : '';
+
+                    // Logged amount cell — warn if it doesn't match PAYOUT_RATES
+                    const loggedCell = row.loggedOwed !== null && row.loggedOwed !== undefined
+                        ? (row.loggedOwedMismatch
+                            ? `<span style="color:var(--warning);font-weight:600;" title="Logged $${row.loggedOwed.toFixed(2)} but PAYOUT_RATES expects $${row.expectedPayout.toFixed(2)} — check the logged amount">⚠ $${row.loggedOwed.toFixed(2)}</span>`
+                            : `$${row.loggedOwed.toFixed(2)}`)
+                        : '—';
+
                     tr.innerHTML = `
                         <td>${dateStr}</td>
                         <td>${row.customerCode}</td>
                         <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
+                        <td>${loggedCell}</td>
                         <td>${row.sscPayout !== undefined ? '$' + row.sscPayout.toFixed(2) : '-'}</td>
                         <td>$${(row.expectedPayout || 0).toFixed(2)}</td>
                         <td class="${row.payoutDiff > 0 ? 'diff-positive' : row.payoutDiff < 0 ? 'diff-negative' : ''}">${row.payoutDiff !== null ? '$' + row.payoutDiff.toFixed(2) : '-'}</td>
