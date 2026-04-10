@@ -1779,6 +1779,7 @@
             'Removal': 30,
             'Missed Install': 50,
             'Missed Service': 20,
+            'Missed Calibration': 20,
             'Missed Other': 20,
             'Missed Removal': 20,
             'Service Call': 95,  // per hour base
@@ -1813,7 +1814,7 @@
 
         // GET values from a range — requests only the `values` field (partial response)
         async function sheetsGet(range) {
-            const url = `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(range)}?fields=values`;
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(range)}?valueRenderOption=UNFORMATTED_VALUE&fields=values`;
             const resp = await fetch(url, { headers: sheetsHeaders() });
             if (resp.status === 401) { googleAccessToken = null; setAuthState('disconnected'); throw new Error('SESSION_EXPIRED'); }
             if (resp.status === 403) throw new Error('NO_ACCESS');
@@ -2201,11 +2202,19 @@
                             if (col && col.trim()) {
                                 let val = row[idx] !== undefined ? row[idx] : null;
                                 const colName = col.trim();
-                                if (val !== null && val !== '' && !colName.toLowerCase().includes('date') &&
-                                    !isNaN(Number(val)) && Number(val) !== 0) {
-                                    val = Number(val);
-                                } else if (val === '') {
+                                if (val === '' || val === null) {
                                     val = null;
+                                } else if (!colName.toLowerCase().includes('date')) {
+                                    // Handle actual numbers (from UNFORMATTED_VALUE API) directly
+                                    if (typeof val === 'number') {
+                                        // already a number — keep as-is
+                                    } else {
+                                        // Strip currency symbols/whitespace from CSV path
+                                        const cleaned = String(val).replace(/[$,\s]/g, '');
+                                        if (cleaned !== '' && !isNaN(Number(cleaned))) {
+                                            val = Number(cleaned);
+                                        }
+                                    }
                                 }
                                 obj[colName] = val;
                             }
@@ -2348,12 +2357,18 @@
                     let val = row[idx] !== undefined ? row[idx] : null;
                     if (col && col.trim()) {
                         const colName = col.trim();
-                        // Convert numeric values for non-date columns
-                        if (val !== null && val !== '' && !colName.toLowerCase().includes('date') &&
-                            !isNaN(Number(val)) && Number(val) !== 0) {
-                            val = Number(val);
-                        } else if (val === '') {
+                        if (val === '' || val === null) {
                             val = null;
+                        } else if (!colName.toLowerCase().includes('date')) {
+                            if (typeof val === 'number') {
+                                // already a number — keep as-is
+                            } else {
+                                // Strip currency symbols/whitespace (CSV path)
+                                const cleaned = String(val).replace(/[$,\s]/g, '');
+                                if (cleaned !== '' && !isNaN(Number(cleaned))) {
+                                    val = Number(cleaned);
+                                }
+                            }
                         }
                         obj[colName] = val;
                     }
@@ -2953,8 +2968,9 @@
                     // F2: entries whose services list contains only Missed* types
                     // ============================================================
                     function isMissedF1(entry) {
-                        const svc = (entry.service || '').trim();
-                        return svc.toLowerCase().startsWith('missed');
+                        // Check each comma-separated service — if ANY starts with "Missed", it's a missed row
+                        const parts = (entry.service || '').split(',').map(s => s.trim());
+                        return parts.some(s => s.toLowerCase().startsWith('missed'));
                     }
 
                     function isMissedF2(entry) {
@@ -3094,7 +3110,10 @@
                     for (const [key, entry] of Object.entries(f1Missed)) {
                         if (missedExactMatched.has(key) || missedUsedF1.has(key)) continue;
                         missedCritical++;
-                        const expectedPayout = PAYOUT_RATES[entry.service] || 0;
+                        // Handle comma-separated service strings like "Calibration, Missed Other"
+                        const svcParts = (entry.service || '').split(',').map(s => s.trim()).filter(Boolean);
+                        const missedPart = svcParts.find(s => s.toLowerCase().startsWith('missed')) || entry.service;
+                        const expectedPayout = PAYOUT_RATES[missedPart] || PAYOUT_RATES[entry.service] || 0;
                         if (expectedPayout && serviceSummary[entry.service] === undefined) {
                             serviceSummary[entry.service] = { count: 0, total: 0 };
                         }
