@@ -423,11 +423,16 @@
 
         /* hover handled per group class */
 
-        /* Row warning icons */
+        /* Row warning icons — inline badges on the date cell */
+        .date-cell {
+            white-space: nowrap;
+        }
+
         .row-warnings {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
+            display: inline-flex;
+            gap: 3px;
+            margin-left: 6px;
+            vertical-align: middle;
         }
 
         .row-warning {
@@ -438,13 +443,13 @@
         }
 
         .row-warning .warn-icon {
-            width: 20px;
-            height: 20px;
+            width: 15px;
+            height: 15px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.7rem;
+            font-size: 0.58rem;
             font-weight: 700;
             flex-shrink: 0;
         }
@@ -472,7 +477,7 @@
         .row-warning .warn-tooltip {
             display: none;
             position: absolute;
-            left: 28px;
+            left: 20px;
             top: 50%;
             transform: translateY(-50%);
             background: var(--bg-primary);
@@ -492,6 +497,41 @@
         .row-warning:hover .warn-tooltip {
             display: block;
         }
+
+        /* Service chips */
+        .svc-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .svc-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            font-family: 'DM Sans', sans-serif;
+            white-space: nowrap;
+            letter-spacing: 0.01em;
+        }
+
+        /* Install family — blue */
+        .svc-install  { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.25); }
+        /* Service/Calibration family — teal */
+        .svc-service  { background: rgba(20,184,166,0.15); color: #2dd4bf; border: 1px solid rgba(20,184,166,0.25); }
+        /* Removal family — orange */
+        .svc-removal  { background: rgba(249,115,22,0.15); color: #fb923c; border: 1px solid rgba(249,115,22,0.25); }
+        /* Missed family — red */
+        .svc-missed   { background: rgba(239,68,68,0.15);  color: #f87171; border: 1px solid rgba(239,68,68,0.25); }
+        /* Special add-ons — purple */
+        .svc-special  { background: rgba(168,85,247,0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.25); }
+        /* Refunds — grey */
+        .svc-refund   { background: rgba(148,163,184,0.12); color: #94a3b8; border: 1px solid rgba(148,163,184,0.2); }
+        /* Unknown / fallback */
+        .svc-other    { background: rgba(148,163,184,0.1); color: #94a3b8; border: 1px solid rgba(148,163,184,0.18); }
 
         .diff-positive {
             color: var(--success);
@@ -1658,7 +1698,6 @@
                         <table id="reconTable">
                             <thead>
                                 <tr>
-                                    <th style="width: 36px;"></th>
                                     <th onclick="sortUnified('serviceDate')">Date <span class="sort-icon">↕</span></th>
                                     <th onclick="sortUnified('customerCode')">Customer <span class="sort-icon">↕</span></th>
                                     <th onclick="sortUnified('servicesDisplay')">Services <span class="sort-icon">↕</span></th>
@@ -2567,7 +2606,7 @@
             if (!date) return 'N/A';
             if (!(date instanceof Date)) date = parseDate(date);
             if (!date || isNaN(date.getTime())) return 'N/A';
-            return date.toISOString().split('T')[0];
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         }
 
         // ============================================================
@@ -2732,12 +2771,39 @@
             return highestRegular + addonsTotal + missedTotal;
         }
 
+        function svcChipClass(name) {
+            const n = name.toLowerCase();
+            if (n.startsWith('missed'))                              return 'svc-missed';
+            if (n.startsWith('refund'))                             return 'svc-refund';
+            if (n.includes('special'))                              return 'svc-special';
+            if (n === 'installation' || n === 'install' || n === 'transfer') return 'svc-install';
+            if (n === 'removal')                                    return 'svc-removal';
+            if (['calibration','service','violation reset','unlock code',
+                 'pressure adjustment','unscheduled service',
+                 'service call'].includes(n))                       return 'svc-service';
+            return 'svc-other';
+        }
+
+        function svcChip(name) {
+            const cls = svcChipClass(name);
+            const label = name.startsWith('Refund') ? `⟲ ${name}` : name;
+            return `<span class="svc-chip ${cls}">${label}</span>`;
+        }
+
+        // For File 2 service lists (array of {type, amount} or strings)
         function formatServices(servicesList) {
             if (!servicesList || servicesList.length === 0) return '-';
-            return servicesList.map(s => {
-                const name = s.type || s;
-                return name.startsWith('Refund') ? `⟲ ${name}` : name;
-            }).join(', ');
+            const chips = servicesList.map(s => svcChip(s.type || s)).join('');
+            return `<span class="svc-chips">${chips}</span>`;
+        }
+
+        // For File 1 raw comma-separated strings e.g. "Calibration, Missed Other"
+        function formatServicesRaw(str) {
+            if (!str || str === '-') return '-';
+            const parts = str.split(',').map(s => s.trim()).filter(Boolean);
+            if (parts.length === 0) return '-';
+            const chips = parts.map(p => svcChip(p)).join('');
+            return `<span class="svc-chips">${chips}</span>`;
         }
 
         // ============================================================
@@ -3083,7 +3149,7 @@
                             serviceDate: f1 ? f1.date : f2.date,
                             customerCode: f1 ? f1.customer : f2.customer,
                             transactionId: f1 ? (f1.transactionId || null) : null,
-                            servicesDisplay: formatServices(servicesList) || (f1 ? f1.service : '-'),
+                            servicesDisplay: formatServices(servicesList) || (f1 ? formatServicesRaw(f1.service) : '-'),
                             sscPayout: f2.payout,
                             expectedPayout,
                             loggedOwed,
@@ -3123,7 +3189,7 @@
                             serviceDate: entry.date,
                             customerCode: entry.customer,
                             transactionId: entry.transactionId || null,
-                            servicesDisplay: entry.service || 'Missed',
+                            servicesDisplay: formatServicesRaw(entry.service) || 'Missed',
                             sscPayout: undefined,
                             expectedPayout,
                             loggedOwed,
@@ -3275,7 +3341,7 @@
                             serviceDate: entry.date,
                             customerCode: entry.customer,
                             services: [],
-                            servicesDisplay: entry.service || '-',
+                            servicesDisplay: formatServicesRaw(entry.service) || '-',
                             owedFile1: entry.owed,
                             owedFile2: undefined,
                             paymentDiff: null,
@@ -3342,7 +3408,7 @@
                         const servicesList = f2.services || [];
                         const expectedPayout = calculateExpectedPayout(servicesList);
                         const f1Svc = f1.service || '';
-                        const servicesDisplay = servicesList.length > 0 ? formatServices(servicesList) : (f1Svc || '-');
+                        const servicesDisplay = servicesList.length > 0 ? formatServices(servicesList) : (f1Svc ? formatServicesRaw(f1Svc) : '-');
 
                         for (const svc of servicesList) {
                             const svcName = svc.type || svc;
@@ -3546,9 +3612,9 @@
 
         function renderWarningsHTML(warnings) {
             if (warnings.length === 0) return '';
-            return `<div class="row-warnings">${warnings.map(w =>
+            return `<span class="row-warnings">${warnings.map(w =>
                 `<span class="row-warning warn-${w.type}"><span class="warn-icon">${w.icon}</span><span class="warn-tooltip">${w.msg}</span></span>`
-            ).join('')}</div>`;
+            ).join('')}</span>`;
         }
 
         // ============================================================
@@ -3618,11 +3684,10 @@
                     const tr1 = document.createElement('tr');
                     tr1.className = `row-payment ${groupClass} ${reconClass}`;
                     tr1.innerHTML = `
-                        <td rowspan="2" style="width: 36px; padding: 8px;">${warningsHTML}</td>
-                        <td rowspan="2">${formatDate(row.serviceDate)}</td>
+                        <td rowspan="2" class="date-cell">${formatDate(row.serviceDate)}${warningsHTML}</td>
                         <td rowspan="2">${row.customerCode}</td>
-                        <td rowspan="2" style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
-                        <td><span class="type-label type-payment">Payment</span></td>
+                        <td rowspan="2">${row.servicesDisplay}</td>
+                        <td><span class="type-label type-payment">Client Paid</span></td>
                         <td>${row.owedFile1 !== undefined ? '$' + row.owedFile1.toFixed(2) : '-'}</td>
                         <td>${row.owedFile2 !== undefined ? '$' + row.owedFile2.toFixed(2) : '-'}</td>
                         <td class="${row.paymentDiff > 0 ? 'diff-positive' : row.paymentDiff < 0 ? 'diff-negative' : ''}">${row.paymentDiff !== null ? '$' + row.paymentDiff.toFixed(2) : '-'}</td>
@@ -3637,7 +3702,7 @@
                     const payoutStatusClass = row.payoutStatus === 'MATCH' ? 'status-match' :
                                               row.payoutStatus === 'MISMATCH' ? 'status-mismatch' : 'status-notfound';
                     tr2.innerHTML = `
-                        <td><span class="type-label type-payout">Payout</span></td>
+                        <td><span class="type-label type-payout">SSC Payout</span></td>
                         <td>$${(row.expectedPayout || 0).toFixed(2)}</td>
                         <td>${row.sscPayout !== undefined ? '$' + row.sscPayout.toFixed(2) : '-'}</td>
                         <td class="${row.payoutDiff > 0 ? 'diff-positive' : row.payoutDiff < 0 ? 'diff-negative' : ''}">${row.payoutDiff !== null ? '$' + row.payoutDiff.toFixed(2) : '-'}</td>
@@ -3648,11 +3713,10 @@
                     const tr = document.createElement('tr');
                     tr.className = `row-single ${groupClass} ${reconClass}`;
                     tr.innerHTML = `
-                        <td style="width: 36px; padding: 8px;">${warningsHTML}</td>
-                        <td>${formatDate(row.serviceDate)}</td>
+                        <td class="date-cell">${formatDate(row.serviceDate)}${warningsHTML}</td>
                         <td>${row.customerCode}</td>
-                        <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
-                        <td><span class="type-label type-payment">Payment</span></td>
+                        <td>${row.servicesDisplay}</td>
+                        <td><span class="type-label type-payment">Client Paid</span></td>
                         <td>${row.owedFile1 !== undefined ? '$' + row.owedFile1.toFixed(2) : '-'}</td>
                         <td>${row.owedFile2 !== undefined ? '$' + row.owedFile2.toFixed(2) : '-'}</td>
                         <td class="${row.paymentDiff > 0 ? 'diff-positive' : row.paymentDiff < 0 ? 'diff-negative' : ''}">${row.paymentDiff !== null ? '$' + row.paymentDiff.toFixed(2) : '-'}</td>
@@ -3730,7 +3794,7 @@
                     tr.innerHTML = `
                         <td>${dateStr}</td>
                         <td>${row.customerCode}</td>
-                        <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
+                        <td>${row.servicesDisplay}</td>
                         <td>${loggedCell}</td>
                         <td style="color: var(--error); font-weight: 600;">$${(row.expectedPayout || 0).toFixed(2)}</td>
                         <td>${actionCell}</td>
@@ -3848,7 +3912,7 @@
                     tr.innerHTML = `
                         <td>${dateStr}</td>
                         <td>${row.customerCode}</td>
-                        <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
+                        <td>${row.servicesDisplay}</td>
                         <td>${loggedCell}</td>
                         <td>${row.sscPayout !== undefined ? '$' + row.sscPayout.toFixed(2) : '-'}</td>
                         <td>$${(row.expectedPayout || 0).toFixed(2)}</td>
@@ -3898,7 +3962,7 @@
                     tr.innerHTML = `
                         <td>${formatDate(row.serviceDate)}</td>
                         <td>${row.customerCode}</td>
-                        <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
+                        <td>${row.servicesDisplay}</td>
                         <td>${row.owedFile1 !== undefined ? '$' + row.owedFile1.toFixed(2) : '-'}</td>
                         <td style="text-align: center;">${proofIconHTML(row.proofUrl)}</td>
                     `;
@@ -3923,7 +3987,7 @@
                     tr.innerHTML = `
                         <td>${formatDate(row.serviceDate)}</td>
                         <td>${row.customerCode}</td>
-                        <td style="font-family: 'DM Sans', sans-serif; font-size: 0.85rem;">${row.servicesDisplay}</td>
+                        <td>${row.servicesDisplay}</td>
                         <td>${row.owedFile2 !== undefined ? '$' + row.owedFile2.toFixed(2) : '-'}</td>
                         <td>${row.sscPayout !== undefined ? '$' + row.sscPayout.toFixed(2) : '-'}</td>
                     `;
