@@ -2836,6 +2836,8 @@
             const reconCol = findColumnByPattern(data, /missed.*reconcili/i);
             // Find "Transaction ID" column
             const txIdCol = findColumnByPattern(data, /transaction.*id/i);
+            // Find "Linked Transaction" column — stores the TX ID of the real visit
+            const linkedTxCol = findColumnByPattern(data, /linked.*transaction/i);
 
             for (const row of data) {
                 const custRaw = row[customerCol];
@@ -2850,11 +2852,13 @@
 
                 const proofUrl = proofCol ? (row[proofCol] || null) : null;
                 const transactionId = txIdCol ? (row[txIdCol] || null) : null;
+                const linkedTransactionId = linkedTxCol ? (row[linkedTxCol] || null) : null;
 
                 if (entries[key]) {
                     entries[key].owed += parseFloat(row[owedCol]) || 0;
                     if (proofUrl && !entries[key].proofUrl) entries[key].proofUrl = proofUrl;
                     if (transactionId && !entries[key].transactionId) entries[key].transactionId = transactionId;
+                    if (linkedTransactionId && !entries[key].linkedTransactionId) entries[key].linkedTransactionId = linkedTransactionId;
                     // If any sub-row is NOT reconciled, the whole entry is unreconciled
                     if (!isReconciled) entries[key].reconciled = false;
                 } else {
@@ -2865,6 +2869,7 @@
                         service: servicesCol ? (row[servicesCol] || '') : '',
                         proofUrl: proofUrl,
                         transactionId: transactionId,
+                        linkedTransactionId: linkedTransactionId,
                         reconciled: isReconciled
                     };
                 }
@@ -3481,6 +3486,67 @@
                         return poa - pob;
                     });
 
+                    // ============================================================
+                    // MISSED FEE PAYOUT ADJUSTMENT
+                    // For each missed appointment that has a Linked Transaction ID,
+                    // add the missed fee to the expected payout of that real visit.
+                    // This is because SSC bundles the missed fee into the payroll
+                    // entry for the actual appointment — so the expected payout
+                    // for that row must include the missed fee to detect non-payment.
+                    // ============================================================
+                    const linkedMissedFeeByTxId = {}; // txId → total missed fees linked to it
+
+                    for (const entry of Object.values(f1Missed)) {
+                        const linkedTxId = entry.linkedTransactionId;
+                        if (!linkedTxId) continue;
+                        // Calculate this missed row's expected fee
+                        const svcParts = (entry.service || '').split(',').map(s => s.trim()).filter(Boolean);
+                        const missedPart = svcParts.find(s => s.toLowerCase().startsWith('missed')) || entry.service;
+                        const missedFee = PAYOUT_RATES[missedPart] || 0;
+                        if (missedFee > 0) {
+                            linkedMissedFeeByTxId[String(linkedTxId)] = (linkedMissedFeeByTxId[String(linkedTxId)] || 0) + missedFee;
+                        }
+                    }
+
+                    // Also include reconciled missed rows that have a linked TX ID
+                    // (they were already settled but still affect the payout expectation)
+                    for (const entry of Object.values(f1All)) {
+                        if (!isMissedF1(entry) || !entry.linkedTransactionId) continue;
+                        const linkedTxId = String(entry.linkedTransactionId);
+                        if (linkedMissedFeeByTxId[linkedTxId] !== undefined) continue; // already counted
+                        const svcParts = (entry.service || '').split(',').map(s => s.trim()).filter(Boolean);
+                        const missedPart = svcParts.find(s => s.toLowerCase().startsWith('missed')) || entry.service;
+                        const missedFee = PAYOUT_RATES[missedPart] || 0;
+                        if (missedFee > 0) {
+                            linkedMissedFeeByTxId[linkedTxId] = (linkedMissedFeeByTxId[linkedTxId] || 0) + missedFee;
+                        }
+                    }
+
+                    // Apply adjustments to main results rows
+                    if (Object.keys(linkedMissedFeeByTxId).length > 0) {
+                        for (const row of results) {
+                            if (!row.transactionId) continue;
+                            const extraFee = linkedMissedFeeByTxId[String(row.transactionId)];
+                            if (!extraFee) continue;
+                            // Add missed fee to expected payout and recalculate
+                            row.expectedPayout = (row.expectedPayout || 0) + extraFee;
+                            row.linkedMissedFee = extraFee;
+                            if (row.sscPayout !== undefined) {
+                                row.payoutDiff = row.sscPayout - row.expectedPayout;
+                                const wasMatch = row.payoutStatus === 'MATCH';
+                                row.payoutStatus = Math.abs(row.payoutDiff) < 0.01 ? 'MATCH' : 'MISMATCH';
+                                // Update aggregate counters
+                                if (wasMatch && row.payoutStatus === 'MISMATCH') {
+                                    payoutMatches--;
+                                    payoutMismatches++;
+                                } else if (!wasMatch && row.payoutStatus === 'MATCH') {
+                                    payoutMismatches--;
+                                    payoutMatches++;
+                                }
+                            }
+                        }
+                    }
+
                     reconciliationResults = {
                         dateRange: dateRange,
                         totalAnalyzed: Object.keys(f1Normal).length,
@@ -3701,9 +3767,12 @@
                     tr2.className = `row-payout row-group-end ${groupClass} ${reconClass}`;
                     const payoutStatusClass = row.payoutStatus === 'MATCH' ? 'status-match' :
                                               row.payoutStatus === 'MISMATCH' ? 'status-mismatch' : 'status-notfound';
+                    const expectedPayoutCell = row.linkedMissedFee
+                        ? `<span title="Includes +$${row.linkedMissedFee.toFixed(2)} missed appointment fee">$${(row.expectedPayout || 0).toFixed(2)} <span style="font-size:0.7rem;color:var(--accent);font-weight:700;">+missed</span></span>`
+                        : `$${(row.expectedPayout || 0).toFixed(2)}`;
                     tr2.innerHTML = `
                         <td><span class="type-label type-payout">SSC Payout</span></td>
-                        <td>$${(row.expectedPayout || 0).toFixed(2)}</td>
+                        <td>${expectedPayoutCell}</td>
                         <td>${row.sscPayout !== undefined ? '$' + row.sscPayout.toFixed(2) : '-'}</td>
                         <td class="${row.payoutDiff > 0 ? 'diff-positive' : row.payoutDiff < 0 ? 'diff-negative' : ''}">${row.payoutDiff !== null ? '$' + row.payoutDiff.toFixed(2) : '-'}</td>
                         <td><span class="status-badge ${payoutStatusClass}">${row.payoutStatus}</span></td>
