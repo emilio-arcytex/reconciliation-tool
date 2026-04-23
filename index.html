@@ -2175,20 +2175,21 @@
                     { range: `${SHEET_NAME}!${match.reconColLetter}${match.rowNumber}`, values: [['YES']] }
                 ];
 
-                // If a note was provided, find or use the Reconciliation Note column
+                // If a note was provided, find the Notes column (or Reconciliation Note)
                 if (note) {
                     const headers = await sheetsGet(SHEET_NAME + '!1:1');
                     const headerRow = headers[0] || [];
-                    let noteColIdx = headerRow.findIndex(h => h && /reconciliation.*note/i.test(h));
+                    // Match "Notes", "Note", or "Reconciliation Note" — flexible
+                    let noteColIdx = headerRow.findIndex(h => h && /^notes?$/i.test(h.trim()));
+                    if (noteColIdx === -1) noteColIdx = headerRow.findIndex(h => h && /reconciliation.*note/i.test(h));
                     if (noteColIdx === -1) {
-                        // Column doesn't exist — append it after the last header
+                        // Column doesn't exist — create it as "Notes" after the last column
                         noteColIdx = headerRow.length;
-                        // Write the header first
                         const headerRange = `${SHEET_NAME}!${colIndexToLetter(noteColIdx)}1`;
                         await fetch(
                             `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(headerRange)}?valueInputOption=RAW`,
                             { method: 'PUT', headers: { ...sheetsHeaders(), 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ values: [['Reconciliation Note']] }) }
+                              body: JSON.stringify({ values: [['Notes']] }) }
                         );
                     }
                     batchData.push({
@@ -2926,6 +2927,8 @@
             const txIdCol = findColumnByPattern(data, /transaction.*id/i);
             // Find "Linked Transaction" column — stores the TX ID of the real visit
             const linkedTxCol = findColumnByPattern(data, /linked.*transaction/i);
+            // Find "Notes" column — reconciliation notes added by staff
+            const noteCol = findColumnByPattern(data, /^notes?$/i) || findColumnByPattern(data, /reconciliation.*note/i);
 
             for (const row of data) {
                 const custRaw = row[customerCol];
@@ -2941,12 +2944,14 @@
                 const proofUrl = proofCol ? (row[proofCol] || null) : null;
                 const transactionId = txIdCol ? (row[txIdCol] || null) : null;
                 const linkedTransactionId = linkedTxCol ? (row[linkedTxCol] || null) : null;
+                const reconNote = noteCol ? (row[noteCol] || null) : null;
 
                 if (entries[key]) {
                     entries[key].owed += parseFloat(row[owedCol]) || 0;
                     if (proofUrl && !entries[key].proofUrl) entries[key].proofUrl = proofUrl;
                     if (transactionId && !entries[key].transactionId) entries[key].transactionId = transactionId;
                     if (linkedTransactionId && !entries[key].linkedTransactionId) entries[key].linkedTransactionId = linkedTransactionId;
+                    if (reconNote && !entries[key].reconNote) entries[key].reconNote = reconNote;
                     // If any sub-row is NOT reconciled, the whole entry is unreconciled
                     if (!isReconciled) entries[key].reconciled = false;
                 } else {
@@ -2958,6 +2963,7 @@
                         proofUrl: proofUrl,
                         transactionId: transactionId,
                         linkedTransactionId: linkedTransactionId,
+                        reconNote: reconNote,
                         reconciled: isReconciled
                     };
                 }
@@ -3560,6 +3566,7 @@
                             proofUrl: f1.proofUrl || null,
                             transactionId: f1.transactionId || null,
                             reconciled: f1.reconciled || false,
+                            reconNote: f1.reconNote || null,
                             isClawback: f2.isClawback || false,
                             clawbackAmt: f2.clawbackAmt || 0
                         });
