@@ -470,8 +470,8 @@
         }
 
         .warn-refund .warn-icon {
-            background: #fce7f3;
-            color: #9d174d;
+            background: rgba(245,158,11,0.2);
+            color: #f59e0b;
         }
 
         .row-warning .warn-tooltip {
@@ -528,10 +528,86 @@
         .svc-missed   { background: rgba(239,68,68,0.15);  color: #f87171; border: 1px solid rgba(239,68,68,0.25); }
         /* Special add-ons — purple */
         .svc-special  { background: rgba(168,85,247,0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.25); }
-        /* Refunds — grey */
-        .svc-refund   { background: rgba(148,163,184,0.12); color: #94a3b8; border: 1px solid rgba(148,163,184,0.2); }
+        /* Refunds — amber, more visible */
+        .svc-refund   { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); }
         /* Unknown / fallback */
         .svc-other    { background: rgba(148,163,184,0.1); color: #94a3b8; border: 1px solid rgba(148,163,184,0.18); }
+
+        /* Reconcile comment modal */
+        .recon-comment-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 220px;
+        }
+
+        .recon-comment-wrap textarea {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.78rem;
+            padding: 6px 8px;
+            resize: none;
+            height: 54px;
+            width: 100%;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+
+        .recon-comment-wrap textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .recon-comment-wrap textarea::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .recon-comment-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .btn-recon-confirm {
+            flex: 1;
+            padding: 5px 10px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .btn-recon-confirm:hover { opacity: 0.85; }
+        .btn-recon-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-recon-cancel {
+            padding: 5px 10px;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .btn-recon-cancel:hover { color: var(--text-primary); }
+
+        .reconciled-note {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            font-style: italic;
+            max-width: 160px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
 
         .diff-positive {
             color: var(--success);
@@ -1726,6 +1802,11 @@
                     <div class="orphan-header" style="background: rgba(234,179,8,0.1); border-bottom: 2px solid var(--warning);">
                         <h3>📅 Missed Appointments</h3>
                         <p>Customers who did not show up. No customer payment expected — only verifying SSC pays the correct missed fee.</p>
+                        <p style="font-size:0.78rem;color:var(--text-secondary);margin-top:6px;line-height:1.6;">
+                            <span style="color:var(--error);font-weight:600;">🚨 Unpaid</span> — In your records, not in SSC payroll. SSC has not paid this.&nbsp;&nbsp;
+                            <span style="color:var(--success);font-weight:600;">✓ Matched</span> — Both sides have it. Verifying payout amount.&nbsp;&nbsp;
+                            <span style="color:var(--text-secondary);font-weight:600;">SSC Only</span> — SSC has this entry but you have no matching record. Review and link if correct.
+                        </p>
                         <span class="orphan-count" id="countMissed" style="color: var(--warning);">0</span>
                     </div>
                     <div class="table-scroll" style="max-height: 400px;">
@@ -2074,14 +2155,13 @@
             return { text: 'Something went wrong: ' + msg, action: null };
         }
 
-        async function markAsReconciled(btn, customerCode, serviceDateStr, transactionId) {
+        async function markAsReconciled(btn, customerCode, serviceDateStr, transactionId, note = '') {
             if (!isGoogleAuthed()) {
                 showToast('Sign in with Google first to enable write-back', 'error');
                 return;
             }
 
             btn.disabled = true;
-            btn.classList.add('loading');
             btn.textContent = 'Saving...';
 
             try {
@@ -2090,13 +2170,39 @@
                     throw new Error(`Row not found for customer ${customerCode} on ${serviceDateStr}`);
                 }
 
-                const range = `${SHEET_NAME}!${match.reconColLetter}${match.rowNumber}`;
+                // Build batch update — always write YES, optionally write note
+                const batchData = [
+                    { range: `${SHEET_NAME}!${match.reconColLetter}${match.rowNumber}`, values: [['YES']] }
+                ];
+
+                // If a note was provided, find or use the Reconciliation Note column
+                if (note) {
+                    const headers = await sheetsGet(SHEET_NAME + '!1:1');
+                    const headerRow = headers[0] || [];
+                    let noteColIdx = headerRow.findIndex(h => h && /reconciliation.*note/i.test(h));
+                    if (noteColIdx === -1) {
+                        // Column doesn't exist — append it after the last header
+                        noteColIdx = headerRow.length;
+                        // Write the header first
+                        const headerRange = `${SHEET_NAME}!${colIndexToLetter(noteColIdx)}1`;
+                        await fetch(
+                            `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(headerRange)}?valueInputOption=RAW`,
+                            { method: 'PUT', headers: { ...sheetsHeaders(), 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ values: [['Reconciliation Note']] }) }
+                        );
+                    }
+                    batchData.push({
+                        range: `${SHEET_NAME}!${colIndexToLetter(noteColIdx)}${match.rowNumber}`,
+                        values: [[note]]
+                    });
+                }
+
                 const resp = await fetch(
-                    `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
+                    `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values:batchUpdate`,
                     {
-                        method: 'PUT',
+                        method: 'POST',
                         headers: { ...sheetsHeaders(), 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ values: [['YES']] })
+                        body: JSON.stringify({ valueInputOption: 'RAW', data: batchData })
                     }
                 );
 
@@ -2107,11 +2213,7 @@
                     throw new Error(err.error?.message || `SHEETS_ERROR:${resp.status}`);
                 }
 
-                // Update UI immediately
-                const td = btn.closest('td');
-                td.innerHTML = '<span class="reconciled-badge">✓ Reconciled</span>';
-
-                // Mark in memory so re-renders stay correct
+                // Mark in memory
                 const missedRow = reconciliationResults.missedResults.find(r =>
                     (transactionId && r.transactionId && String(r.transactionId) === String(transactionId)) ||
                     (r.customerCode === customerCode && formatDate(r.serviceDate) === serviceDateStr)
@@ -2122,23 +2224,21 @@
                     (transactionId && r.transactionId && String(r.transactionId) === String(transactionId)) ||
                     (r.customerCode === customerCode && formatDate(r.serviceDate) === serviceDateStr)
                 );
-                if (mainRow) mainRow.reconciled = true;
+                if (mainRow) { mainRow.reconciled = true; if (note) mainRow.reconNote = note; }
 
                 sheetHeaders = null;
 
-                // Re-render everything to reflect updated reconciled state
+                // Re-render everything
                 renderUnifiedTable();
                 renderOrphanCards();
 
-                showToast(`Customer ${customerCode} marked as reconciled ✓`, 'success');
+                showToast(`Marked as reconciled ✓${note ? ' — note saved' : ''}`, 'success');
 
             } catch (e) {
                 const friendly = getFriendlyError(e, customerCode, serviceDateStr);
                 btn.disabled = false;
-                btn.classList.remove('loading');
                 btn.textContent = '✓ Mark Reconciled';
                 showToast(friendly.text, 'error');
-                // If it's a session expiry, auto-trigger re-auth after toast
                 if (friendly.action) setTimeout(friendly.action, 1000);
             }
         }
@@ -2724,39 +2824,27 @@
         }
 
         // ============================================================
-        // PAYOUT / SERVICE HELPERS
-        // ============================================================
-        // ============================================================
         // EXPECTED PAYOUT CALCULATION
         // Rule: Only highest-value regular service per visit
         //       Missed services always counted separately
         //       Special add-ons always added to base
-        //       Refunds cancel their specific service
+        //       Refunds do NOT reduce SSC payout — they are customer-facing
+        //       adjustments only. SSC still owes for every service performed.
         // ============================================================
         function calculateExpectedPayout(servicesList) {
             if (!servicesList || servicesList.length === 0) return 0;
 
             const svcNames = servicesList.map(s => s.type || s);
 
-            // 1. Separate refunds and match them to cancel specific services
-            const refunds = svcNames.filter(s => s.startsWith('Refund'));
-            let remaining = svcNames.filter(s => !s.startsWith('Refund'));
+            // Exclude refund entries — they don't affect what SSC owes us
+            const services = svcNames.filter(s => !s.startsWith('Refund'));
 
-            for (const refund of refunds) {
-                const refundedName = refund.replace(/^Refund\s*-\s*/, '').replace(' Appointment', '').trim();
-                const idx = remaining.findIndex(s =>
-                    s === refundedName ||
-                    s.toLowerCase().includes(refundedName.toLowerCase())
-                );
-                if (idx !== -1) remaining.splice(idx, 1);
-            }
-
-            // 2. Categorize remaining services
+            // Categorize services
             let missedTotal = 0;
             let addonsTotal = 0;
             let regularRates = [];
 
-            for (const svc of remaining) {
+            for (const svc of services) {
                 if (MISSED_SERVICES.has(svc)) {
                     missedTotal += PAYOUT_RATES[svc] || 0;
                 } else if (SPECIAL_ADDONS.has(svc)) {
@@ -2766,7 +2854,7 @@
                 }
             }
 
-            // 3. Only highest regular service + always-count items
+            // Only highest regular service + always-count items
             const highestRegular = regularRates.length > 0 ? Math.max(...regularRates) : 0;
             return highestRegular + addonsTotal + missedTotal;
         }
@@ -2951,7 +3039,11 @@
                     const key = `${currentCustomer}_${dateKey}`;
 
                     const paymentAmt = parseFloat(row[amountCol]) || 0;
-                    const payoutAmt = Math.abs(parseFloat(row[owedCol]) || 0);
+                    const rawOwed = parseFloat(row[owedCol]) || 0;
+                    // Owed is negative when SSC pays Durham, positive when Durham pays SSC (clawback)
+                    // We take the absolute value but track direction
+                    const payoutAmt = Math.abs(rawOwed);
+                    const isClawback = rawOwed > 0.01; // SSC reclaiming a previously paid fee
 
                     // Skip pure refund entries (negative customer total, no fees owed)
                     // These are administrative reversals, not real service visits
@@ -2966,7 +3058,9 @@
                         customer: currentCustomer,
                         date: d,
                         payment: paymentAmt,
-                        payout: payoutAmt,
+                        payout: isClawback ? 0 : payoutAmt, // clawback = SSC paid $0 to Durham
+                        isClawback,
+                        clawbackAmt: isClawback ? payoutAmt : 0,
                         services: [...currentServices]
                     };
 
@@ -3465,7 +3559,9 @@
                             payoutStatus,
                             proofUrl: f1.proofUrl || null,
                             transactionId: f1.transactionId || null,
-                            reconciled: f1.reconciled || false
+                            reconciled: f1.reconciled || false,
+                            isClawback: f2.isClawback || false,
+                            clawbackAmt: f2.clawbackAmt || 0
                         });
                     }
 
@@ -3655,22 +3751,24 @@
                 }
             }
 
-            // Orphan refund (refund without matching service in the visit)
+            // Refund present in SSC payroll — always flag regardless of match status
+            // SSC reducing their payout via a refund always needs review
             const svcNames = servicesList.map(s => s.type || s);
             const refunds = svcNames.filter(s => s.startsWith('Refund'));
-            const nonRefunds = svcNames.filter(s => !s.startsWith('Refund'));
-            for (const refund of refunds) {
-                const refundedName = refund.replace(/^Refund\s*-\s*/, '').replace(' Appointment', '').trim();
-                const hasMatch = nonRefunds.some(s => s === refundedName || s.toLowerCase().includes(refundedName.toLowerCase()));
-                if (!hasMatch) {
-                    warnings.push({ type: 'refund', icon: '↩', msg: `Refund "${refund}" has no matching service in this visit` });
-                    break;
+            if (refunds.length > 0) {
+                const refundNames = refunds
+                    .map(r => r.replace(/^Refund\s*-\s*/, '').replace(' Appointment', '').trim())
+                    .join(', ');
+                if (row.isClawback) {
+                    warnings.push({ type: 'refund', icon: '↩', msg: `SSC clawed back a previously paid fee (${refundNames}) — verify this is correct` });
+                } else {
+                    warnings.push({ type: 'refund', icon: '↩', msg: `SSC issued a refund (${refundNames}) — they reduced their payout by $${row.clawbackAmt > 0 ? row.clawbackAmt.toFixed(2) : '20.00'}. Durham still performed this service so a mismatch is expected.` });
                 }
             }
 
             // Payout mismatch
             if (row.payoutDiff !== null && Math.abs(row.payoutDiff) > 0.01) {
-                warnings.push({ type: 'large', icon: '$', msg: `Payout discrepancy: SSC owes $${row.sscPayout?.toFixed(2)}, expected $${(row.expectedPayout||0).toFixed(2)}` });
+                warnings.push({ type: 'large', icon: '$', msg: `Payout discrepancy: SSC paid $${row.sscPayout?.toFixed(2)}, expected $${(row.expectedPayout||0).toFixed(2)}` });
             }
 
             return warnings;
@@ -3736,12 +3834,20 @@
                 const dateStr = formatDate(row.serviceDate);
                 let actionCell;
                 if (row.reconciled) {
-                    actionCell = '<span class="reconciled-row-badge">✓ Reconciled</span>';
+                    const note = row.reconNote ? `<div class="reconciled-note" title="${row.reconNote}">📝 ${row.reconNote}</div>` : '';
+                    actionCell = `<div><span class="reconciled-row-badge">✓ Reconciled</span>${note}</div>`;
                 } else if (isMismatch) {
                     const authed = isGoogleAuthed();
-                    actionCell = authed
-                        ? `<button class="btn-reconcile" onclick="markAsReconciled(this, ${row.customerCode}, '${dateStr}', ${JSON.stringify(row.transactionId || null)})">✓ Mark Reconciled</button>`
-                        : `<button class="btn-reconcile" disabled title="Sign in with Google to enable this">✓ Mark Reconciled</button>`;
+                    if (authed) {
+                        actionCell = `<div class="recon-comment-wrap">
+                            <textarea placeholder="Optional note (e.g. client split payment, logging error…)" rows="2"></textarea>
+                            <div class="recon-comment-actions">
+                                <button class="btn-recon-confirm">✓ Mark Reconciled</button>
+                            </div>
+                        </div>`;
+                    } else {
+                        actionCell = `<button class="btn-reconcile" disabled title="Sign in with Google to enable this">✓ Mark Reconciled</button>`;
+                    }
                 } else {
                     actionCell = '';
                 }
@@ -3761,6 +3867,15 @@
                         <td rowspan="2" style="text-align: center;">${proofIconHTML(row.proofUrl)}</td>
                         <td rowspan="2">${actionCell}</td>
                     `;
+                    // Wire confirm button
+                    const confirmBtn = tr1.querySelector('.btn-recon-confirm');
+                    if (confirmBtn) {
+                        const cust = row.customerCode, txId = row.transactionId || null;
+                        confirmBtn.addEventListener('click', function() {
+                            const note = this.closest('.recon-comment-wrap').querySelector('textarea').value.trim();
+                            markAsReconciled(this, cust, dateStr, txId, note);
+                        });
+                    }
                     tbody.appendChild(tr1);
 
                     const tr2 = document.createElement('tr');
@@ -3793,6 +3908,14 @@
                         <td style="text-align: center;">${proofIconHTML(row.proofUrl)}</td>
                         <td>${actionCell}</td>
                     `;
+                    const confirmBtn = tr.querySelector('.btn-recon-confirm');
+                    if (confirmBtn) {
+                        const cust = row.customerCode, txId = row.transactionId || null;
+                        confirmBtn.addEventListener('click', function() {
+                            const note = this.closest('.recon-comment-wrap').querySelector('textarea').value.trim();
+                            markAsReconciled(this, cust, dateStr, txId, note);
+                        });
+                    }
                     tbody.appendChild(tr);
                 }
 
@@ -3928,7 +4051,7 @@
                     if (row.missedStatus === 'CRITICAL') {
                         missedBadge = '<span class="status-badge status-mismatch">🚨 UNPAID</span>';
                     } else if (row.missedStatus === 'SSC_ONLY') {
-                        missedBadge = '<span class="status-badge status-notfound">SSC ONLY</span>';
+                        missedBadge = '<span class="status-badge status-notfound" title="SSC has this missed appointment in their payroll, but there is no matching record in your sheet. Link it to confirm or investigate.">SSC Only — Not in Your Records</span>';
                     } else {
                         const sc = row.payoutStatus === 'MATCH' ? 'status-match' : 'status-mismatch';
                         missedBadge = `<span class="status-badge ${sc}">${row.payoutStatus}</span>`;
