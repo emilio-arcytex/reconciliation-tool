@@ -809,7 +809,16 @@
         }
 
         /* Search bar */
+        /* Search + filter row */
+        .search-filter-row {
+            display: flex;
+            gap: 12px;
+            align-items: stretch;
+            margin-bottom: 12px;
+        }
+
         .search-bar {
+            flex: 1;
             display: flex;
             align-items: center;
             gap: 10px;
@@ -861,6 +870,152 @@
             color: var(--text-primary);
         }
 
+        /* Service filter dropdown (from column header) */
+        .svc-header-wrap {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .svc-header-wrap .svc-filter-icon {
+            font-size: 0.7rem;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+        }
+
+        .svc-header-wrap:hover .svc-filter-icon {
+            opacity: 1;
+        }
+
+        .svc-header-wrap.has-filter .svc-filter-icon {
+            opacity: 1;
+            color: var(--accent);
+        }
+
+        .svc-filter-dropdown {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            min-width: 240px;
+            max-height: 380px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+            padding: 8px 0;
+            overflow: hidden;
+            flex-direction: column;
+        }
+
+        .svc-filter-dropdown.show {
+            display: flex;
+        }
+
+        .svc-filter-search {
+            padding: 6px 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .svc-filter-search input {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.8rem;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        .svc-filter-search input:focus {
+            border-color: var(--accent);
+        }
+
+        .svc-filter-list {
+            overflow-y: auto;
+            flex: 1;
+            min-height: 0;
+            padding: 4px 0;
+        }
+
+        .svc-filter-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.82rem;
+            color: var(--text-primary);
+            transition: background 0.15s;
+        }
+
+        .svc-filter-item:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .svc-filter-item input[type="checkbox"] {
+            accent-color: var(--accent);
+            width: 15px;
+            height: 15px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .svc-filter-item .svc-chip {
+            font-size: 0.78rem;
+            padding: 3px 10px;
+            pointer-events: none;
+        }
+
+        .svc-filter-actions {
+            display: flex;
+            gap: 6px;
+            padding: 6px 12px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .svc-filter-actions button {
+            flex: 1;
+            padding: 5px 0;
+            border: none;
+            border-radius: 6px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .svc-filter-apply {
+            background: var(--accent);
+            color: white;
+        }
+
+        .svc-filter-clear {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+        }
+
+        .svc-active-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 16px;
+            height: 16px;
+            padding: 0 4px;
+            border-radius: 8px;
+            background: var(--accent);
+            color: white;
+            font-size: 0.65rem;
+            font-weight: 700;
+            margin-left: 2px;
+        }
+
         /* Proof of payment icon */
         .proof-icon {
             display: inline-flex;
@@ -892,6 +1047,26 @@
             opacity: 0.2;
             font-size: 0.75rem;
             text-align: center;
+        }
+
+        /* Edit in Sheet button */
+        .edit-sheet-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            border-radius: 6px;
+            background: rgba(59,130,246,0.12);
+            color: #60a5fa;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .edit-sheet-btn:hover {
+            background: rgba(59,130,246,0.25);
+            color: #93bbfd;
+            transform: scale(1.1);
         }
 
         .loading {
@@ -1753,12 +1928,14 @@
                     <div class="service-grid" id="serviceGrid"></div>
                 </div>
 
-                <div class="search-bar">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-                    </svg>
-                    <input type="text" id="searchInput" placeholder="Search by customer code..." oninput="filterTable()">
-                    <button class="search-clear" id="searchClear" onclick="clearSearch()" style="display:none;">✕</button>
+                <div class="search-filter-row">
+                    <div class="search-bar">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                        </svg>
+                        <input type="text" id="searchInput" placeholder="Search by customer code..." oninput="filterTable()">
+                        <button class="search-clear" id="searchClear" onclick="clearSearch()" style="display:none;">✕</button>
+                    </div>
                 </div>
 
                 <div class="filter-tabs" id="filterTabs">
@@ -1776,13 +1953,17 @@
                                 <tr>
                                     <th onclick="sortUnified('serviceDate')">Date <span class="sort-icon">↕</span></th>
                                     <th onclick="sortUnified('customerCode')">Customer <span class="sort-icon">↕</span></th>
-                                    <th onclick="sortUnified('servicesDisplay')">Services <span class="sort-icon">↕</span></th>
+                                    <th>
+                                        <span class="svc-header-wrap" id="svcHeaderWrap" onclick="toggleServiceFilter(event)">
+                                            Services <span class="svc-filter-icon">▼</span><span class="svc-active-count" id="svcActiveCount" style="display:none;">0</span>
+                                        </span>
+                                    </th>
                                     <th>Check</th>
                                     <th>Ours</th>
                                     <th>SSC</th>
                                     <th>Difference</th>
                                     <th>Status</th>
-                                    <th style="width: 40px; text-align: center;">Proof</th>
+                                    <th style="width: 70px; text-align: center;">Proof</th>
                                     <th style="width: 130px;">Action</th>
                                 </tr>
                             </thead>
@@ -1844,7 +2025,7 @@
                                     <th>Customer</th>
                                     <th>Services</th>
                                     <th>Owed (Record)</th>
-                                    <th style="width: 40px; text-align: center;">Proof</th>
+                                    <th style="width: 70px; text-align: center;">Proof</th>
                                 </tr>
                             </thead>
                             <tbody id="notInSSCBody"></tbody>
@@ -2930,7 +3111,8 @@
             // Find "Notes" column — reconciliation notes added by staff
             const noteCol = findColumnByPattern(data, /^notes?$/i) || findColumnByPattern(data, /reconciliation.*note/i);
 
-            for (const row of data) {
+            for (let idx = 0; idx < data.length; idx++) {
+                const row = data[idx];
                 const custRaw = row[customerCol];
                 if (custRaw === null || custRaw === undefined || custRaw === '' || isNaN(Number(custRaw)) || Number(custRaw) <= 0) continue;
 
@@ -2945,6 +3127,7 @@
                 const transactionId = txIdCol ? (row[txIdCol] || null) : null;
                 const linkedTransactionId = linkedTxCol ? (row[linkedTxCol] || null) : null;
                 const reconNote = noteCol ? (row[noteCol] || null) : null;
+                const sheetRow = idx + 2; // +1 for 0-index, +1 for header row
 
                 if (entries[key]) {
                     entries[key].owed += parseFloat(row[owedCol]) || 0;
@@ -2952,7 +3135,6 @@
                     if (transactionId && !entries[key].transactionId) entries[key].transactionId = transactionId;
                     if (linkedTransactionId && !entries[key].linkedTransactionId) entries[key].linkedTransactionId = linkedTransactionId;
                     if (reconNote && !entries[key].reconNote) entries[key].reconNote = reconNote;
-                    // If any sub-row is NOT reconciled, the whole entry is unreconciled
                     if (!isReconciled) entries[key].reconciled = false;
                 } else {
                     entries[key] = {
@@ -2964,7 +3146,8 @@
                         transactionId: transactionId,
                         linkedTransactionId: linkedTransactionId,
                         reconNote: reconNote,
-                        reconciled: isReconciled
+                        reconciled: isReconciled,
+                        sourceRow: sheetRow
                     };
                 }
             }
@@ -3457,7 +3640,8 @@
                             payoutStatus: '-',
                             proofUrl: entry.proofUrl || null,
                             transactionId: entry.transactionId || null,
-                            reconciled: entry.reconciled || false
+                            reconciled: entry.reconciled || false,
+                            sourceRow: entry.sourceRow || null
                         });
                         notFoundInF2++;
                     }
@@ -3568,7 +3752,8 @@
                             reconciled: f1.reconciled || false,
                             reconNote: f1.reconNote || null,
                             isClawback: f2.isClawback || false,
-                            clawbackAmt: f2.clawbackAmt || 0
+                            clawbackAmt: f2.clawbackAmt || 0,
+                            sourceRow: f1.sourceRow || null
                         });
                     }
 
@@ -3800,6 +3985,16 @@
             </a>`;
         }
 
+        function editSheetHTML(sourceRow) {
+            if (!sourceRow) return '';
+            const url = `https://docs.google.com/spreadsheets/d/${FILE1_SHEET_ID}/edit#gid=0&range=D${sourceRow}`;
+            return `<a href="${url}" target="_blank" rel="noopener" class="edit-sheet-btn" title="Edit row ${sourceRow} in Google Sheet">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                </svg>
+            </a>`;
+        }
+
         // ============================================================
         // RENDER UNIFIED TABLE (2 rows per visit)
         // ============================================================
@@ -3871,7 +4066,7 @@
                         <td>${row.owedFile2 !== undefined ? '$' + row.owedFile2.toFixed(2) : '-'}</td>
                         <td class="${row.paymentDiff > 0 ? 'diff-positive' : row.paymentDiff < 0 ? 'diff-negative' : ''}">${row.paymentDiff !== null ? '$' + row.paymentDiff.toFixed(2) : '-'}</td>
                         <td><span class="status-badge ${payStatusClass}">${row.paymentStatus}</span></td>
-                        <td rowspan="2" style="text-align: center;">${proofIconHTML(row.proofUrl)}</td>
+                        <td rowspan="2" style="text-align: center;">${proofIconHTML(row.proofUrl)} ${editSheetHTML(row.sourceRow)}</td>
                         <td rowspan="2">${actionCell}</td>
                     `;
                     // Wire confirm button
@@ -3912,7 +4107,7 @@
                         <td>${row.owedFile2 !== undefined ? '$' + row.owedFile2.toFixed(2) : '-'}</td>
                         <td class="${row.paymentDiff > 0 ? 'diff-positive' : row.paymentDiff < 0 ? 'diff-negative' : ''}">${row.paymentDiff !== null ? '$' + row.paymentDiff.toFixed(2) : '-'}</td>
                         <td><span class="status-badge ${payStatusClass}">${row.paymentStatus}</span></td>
-                        <td style="text-align: center;">${proofIconHTML(row.proofUrl)}</td>
+                        <td style="text-align: center;">${proofIconHTML(row.proofUrl)} ${editSheetHTML(row.sourceRow)}</td>
                         <td>${actionCell}</td>
                     `;
                     const confirmBtn = tr.querySelector('.btn-recon-confirm');
@@ -4163,7 +4358,7 @@
                         <td>${row.customerCode}</td>
                         <td>${row.servicesDisplay}</td>
                         <td>${row.owedFile1 !== undefined ? '$' + row.owedFile1.toFixed(2) : '-'}</td>
-                        <td style="text-align: center;">${proofIconHTML(row.proofUrl)}</td>
+                        <td style="text-align: center;">${proofIconHTML(row.proofUrl)} ${editSheetHTML(row.sourceRow)}</td>
                     `;
                     body1.appendChild(tr);
                 }
@@ -4208,12 +4403,12 @@
 
             const orphanCards = document.getElementById('orphanCards');
             const tableContainer = document.querySelector('.table-container');
-            const searchBar = document.querySelector('.search-bar');
+            const searchRow = document.querySelector('.search-filter-row');
 
             if (filter === 'notfound' || filter === 'missed') {
                 orphanCards.style.display = 'flex';
                 tableContainer.style.display = 'none';
-                searchBar.style.display = 'none';
+                searchRow.style.display = 'none';
                 // Show only the relevant card(s)
                 document.getElementById('cardMissed').style.display = filter === 'missed' ? 'block' : 'none';
                 document.getElementById('cardNotInSSC').style.display = filter === 'notfound' ? 'block' : 'none';
@@ -4221,7 +4416,7 @@
             } else {
                 orphanCards.style.display = 'none';
                 tableContainer.style.display = 'block';
-                searchBar.style.display = 'flex';
+                searchRow.style.display = 'flex';
             }
 
             if (rerender) renderUnifiedTable();
@@ -4235,10 +4430,12 @@
             const clearBtn = document.getElementById('searchClear');
             clearBtn.style.display = query ? 'block' : 'none';
 
+            const hasServiceFilter = selectedServiceFilters.length > 0;
+
             const tbody = document.getElementById('reconTableBody');
             const rows = tbody.querySelectorAll('tr');
 
-            if (!query) {
+            if (!query && !hasServiceFilter) {
                 rows.forEach(tr => tr.style.display = '');
                 return;
             }
@@ -4249,18 +4446,25 @@
                 const hasRowspan = tr.querySelector('td[rowspan]');
 
                 if (hasRowspan) {
-                    const custCell = tr.children[2];
-                    const custText = custCell ? custCell.textContent : '';
-                    const match = custText.includes(query);
-                    tr.style.display = match ? '' : 'none';
+                    const custText = tr.children[1] ? tr.children[1].textContent.trim() : '';
+                    const svcText = tr.children[2] ? tr.children[2].textContent.trim().toLowerCase() : '';
+
+                    const matchQuery = !query || custText.includes(query);
+                    const matchService = !hasServiceFilter || selectedServiceFilters.some(s => svcText.includes(s));
+                    const show = matchQuery && matchService;
+
+                    tr.style.display = show ? '' : 'none';
                     if (i + 1 < rows.length) {
-                        rows[i + 1].style.display = match ? '' : 'none';
+                        rows[i + 1].style.display = show ? '' : 'none';
                     }
                     i += 2;
                 } else {
-                    const custCell = tr.children[2];
-                    const custText = custCell ? custCell.textContent : '';
-                    tr.style.display = custText.includes(query) ? '' : 'none';
+                    const custText = tr.children[1] ? tr.children[1].textContent.trim() : '';
+                    const svcText = tr.children[2] ? tr.children[2].textContent.trim().toLowerCase() : '';
+
+                    const matchQuery = !query || custText.includes(query);
+                    const matchService = !hasServiceFilter || selectedServiceFilters.some(s => svcText.includes(s));
+                    tr.style.display = (matchQuery && matchService) ? '' : 'none';
                     i++;
                 }
             }
@@ -4271,6 +4475,143 @@
             document.getElementById('searchClear').style.display = 'none';
             filterTable();
         }
+
+        function populateServiceFilter() {
+            const r = reconciliationResults;
+            const list = document.getElementById('svcFilterList');
+            if (!list || !r) return;
+
+            // Helper: strip HTML tags to get plain text
+            function stripHTML(str) {
+                const tmp = document.createElement('div');
+                tmp.innerHTML = str;
+                return tmp.textContent.trim();
+            }
+
+            const serviceTypes = new Set();
+            for (const row of r.details) {
+                const svcs = row.services || [];
+                for (const svc of svcs) {
+                    const raw = svc.type || svc;
+                    if (raw) serviceTypes.add(stripHTML(String(raw)));
+                }
+                if (svcs.length === 0 && row.servicesDisplay && row.servicesDisplay !== '-') {
+                    const plain = stripHTML(row.servicesDisplay);
+                    plain.split(',').forEach(s => {
+                        const t = s.trim().replace('⟲ ', '');
+                        if (t) serviceTypes.add(t);
+                    });
+                }
+            }
+
+            list.innerHTML = '';
+            const sorted = [...serviceTypes].sort();
+            for (const svc of sorted) {
+                const cls = svcChipClass(svc);
+                const item = document.createElement('label');
+                item.className = 'svc-filter-item';
+                item.setAttribute('data-svc', svc.toLowerCase());
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.value = svc;
+                const chip = document.createElement('span');
+                chip.className = `svc-chip ${cls}`;
+                chip.textContent = svc;
+                item.appendChild(cb);
+                item.appendChild(chip);
+                list.appendChild(item);
+            }
+        }
+
+        let selectedServiceFilters = [];
+
+        function toggleServiceFilter(e) {
+            e.stopPropagation();
+            const dropdown = document.getElementById('svcFilterDropdown');
+            const isOpen = dropdown.classList.contains('show');
+
+            if (isOpen) {
+                dropdown.classList.remove('show');
+                return;
+            }
+
+            // Position below the header
+            const wrap = document.getElementById('svcHeaderWrap');
+            const rect = wrap.getBoundingClientRect();
+            const dropdownHeight = 380; // max-height from CSS
+
+            // Check if it would overflow the bottom of the viewport
+            const spaceBelow = window.innerHeight - rect.bottom - 8;
+            const spaceAbove = rect.top - 8;
+
+            if (spaceBelow >= dropdownHeight || spaceBelow >= spaceAbove) {
+                // Open downward
+                dropdown.style.top = (rect.bottom + 4) + 'px';
+                dropdown.style.bottom = 'auto';
+                dropdown.style.maxHeight = Math.min(dropdownHeight, spaceBelow) + 'px';
+            } else {
+                // Open upward
+                dropdown.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+                dropdown.style.top = 'auto';
+                dropdown.style.maxHeight = Math.min(dropdownHeight, spaceAbove) + 'px';
+            }
+
+            dropdown.style.left = rect.left + 'px';
+            dropdown.classList.add('show');
+            document.getElementById('svcFilterSearch').value = '';
+            filterServiceList();
+            setTimeout(() => document.getElementById('svcFilterSearch').focus(), 50);
+        }
+
+        function filterServiceList() {
+            const query = document.getElementById('svcFilterSearch').value.toLowerCase();
+            const items = document.querySelectorAll('#svcFilterList .svc-filter-item');
+            items.forEach(item => {
+                const svc = item.getAttribute('data-svc');
+                item.style.display = svc.includes(query) ? '' : 'none';
+            });
+        }
+
+        function applyServiceFilter() {
+            const checkboxes = document.querySelectorAll('#svcFilterList input[type="checkbox"]');
+            selectedServiceFilters = [];
+            checkboxes.forEach(cb => {
+                if (cb.checked) selectedServiceFilters.push(cb.value.toLowerCase());
+            });
+
+            const badge = document.getElementById('svcActiveCount');
+            const wrap = document.getElementById('svcHeaderWrap');
+            if (selectedServiceFilters.length > 0) {
+                badge.textContent = selectedServiceFilters.length;
+                badge.style.display = 'inline-flex';
+                wrap.classList.add('has-filter');
+            } else {
+                badge.style.display = 'none';
+                wrap.classList.remove('has-filter');
+            }
+
+            document.getElementById('svcFilterDropdown').classList.remove('show');
+            filterTable();
+        }
+
+        function clearServiceFilter() {
+            const checkboxes = document.querySelectorAll('#svcFilterList input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = false);
+            selectedServiceFilters = [];
+            document.getElementById('svcActiveCount').style.display = 'none';
+            document.getElementById('svcHeaderWrap').classList.remove('has-filter');
+            document.getElementById('svcFilterDropdown').classList.remove('show');
+            filterTable();
+        }
+
+        // Close dropdown on outside click
+        document.addEventListener('click', function(e) {
+            const dropdown = document.getElementById('svcFilterDropdown');
+            const wrap = document.getElementById('svcHeaderWrap');
+            if (dropdown && wrap && !wrap.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
 
         // ============================================================
         // DISPLAY RESULTS
@@ -4388,13 +4729,17 @@
             activeFilter = 'all';
             setFilter('all', false);
             currentSort = { column: null, direction: 'asc' };
+
+            // Populate service filter dropdown
+            populateServiceFilter();
+
             renderUnifiedTable();
             renderOrphanCards();
 
             // Initial state: table visible, orphan cards hidden (shown via "Not Found" tab)
             document.getElementById('orphanCards').style.display = 'none';
             document.querySelector('.table-container').style.display = 'block';
-            document.querySelector('.search-bar').style.display = 'flex';
+            document.querySelector('.search-filter-row').style.display = 'flex';
 
             resultsDiv.classList.add('show');
             downloadBtn.style.display = 'inline-flex';
@@ -4842,5 +5187,16 @@
         </div>
     </div>
 
+        <!-- Service filter dropdown (floating, outside table) -->
+        <div class="svc-filter-dropdown" id="svcFilterDropdown">
+            <div class="svc-filter-search">
+                <input type="text" id="svcFilterSearch" placeholder="Search services..." oninput="filterServiceList()">
+            </div>
+            <div class="svc-filter-list" id="svcFilterList"></div>
+            <div class="svc-filter-actions">
+                <button class="svc-filter-clear" onclick="clearServiceFilter()">Clear</button>
+                <button class="svc-filter-apply" onclick="applyServiceFilter()">Apply</button>
+            </div>
+        </div>
 </body>
 </html>
