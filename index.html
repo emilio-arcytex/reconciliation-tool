@@ -1731,6 +1731,109 @@
             font-weight: 600;
         }
     </style>
+    <style>
+        /* Saved payrolls */
+        .payroll-save-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            align-items: center;
+        }
+
+        .payroll-save-row input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.82rem;
+            outline: none;
+        }
+
+        .payroll-save-row input:focus {
+            border-color: var(--accent);
+        }
+
+        .payroll-save-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.2s;
+        }
+
+        .payroll-save-btn:hover { background: var(--accent-hover); }
+
+        .payroll-save-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .saved-payrolls-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            margin-top: -8px;
+        }
+
+        .saved-payrolls-label {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .saved-payrolls-bar select {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.85rem;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .saved-payrolls-bar select:focus { border-color: var(--accent); }
+
+        .payroll-refresh-btn {
+            width: 34px;
+            height: 34px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .payroll-refresh-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -1787,8 +1890,26 @@
                     </svg>
                 </div>
                 <h3>File 2 — Vendor Payroll</h3>
-                <p>Upload the file provided every 15 days</p>
+                <p>Upload or load a saved payroll</p>
                 <div class="file-name" id="file2-name"></div>
+
+                <!-- Save payroll to Sheet -->
+                <div class="payroll-save-row" id="payrollSaveRow" style="display:none;">
+                    <input type="text" id="payrollSaveName" placeholder="Name this payroll (e.g. April 1-15)">
+                    <button class="payroll-save-btn" onclick="savePayrollToSheet()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/></svg>
+                        Save to Sheet
+                    </button>
+                </div>
+            </div>
+
+            <!-- Saved payrolls selector -->
+            <div class="saved-payrolls-bar" id="savedPayrollsBar" style="display:none;">
+                <label class="saved-payrolls-label">📁 Saved Payrolls</label>
+                <select id="savedPayrollSelect" onchange="loadPayrollFromSheet()">
+                    <option value="">Select a saved payroll...</option>
+                </select>
+                <button class="payroll-refresh-btn" onclick="listSavedPayrolls()" title="Refresh list">↻</button>
             </div>
         </div>
 
@@ -2155,6 +2276,7 @@
                     setAuthState('connected');
                     showToast('Connected to Google Sheets ✓', 'success');
                     if (reconciliationResults) renderOrphanCards();
+                    listSavedPayrolls(); // Load saved payrolls dropdown
                 }
             });
             client.requestAccessToken();
@@ -2583,6 +2705,166 @@
                 finish(false, 'Could not refresh — check your connection and sheet is published to web');
             }
         }
+        // ============================================================
+        // SAVED PAYROLLS — Save/Load vendor payrolls as Google Sheet tabs
+        // ============================================================
+        const PAYROLL_PREFIX = 'Payroll: ';
+
+        async function listSavedPayrolls() {
+            if (!isGoogleAuthed()) return;
+            try {
+                const resp = await fetch(
+                    `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}?fields=sheets.properties.title`,
+                    { headers: { Authorization: `Bearer ${googleAccessToken}` } }
+                );
+                if (!resp.ok) throw new Error('Failed to list sheets');
+                const data = await resp.json();
+                const sheets = (data.sheets || [])
+                    .map(s => s.properties.title)
+                    .filter(t => t.startsWith(PAYROLL_PREFIX))
+                    .sort()
+                    .reverse(); // newest first by name
+
+                const select = document.getElementById('savedPayrollSelect');
+                select.innerHTML = '<option value="">Select a saved payroll...</option>';
+                for (const name of sheets) {
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    opt.textContent = name.replace(PAYROLL_PREFIX, '');
+                    select.appendChild(opt);
+                }
+
+                const bar = document.getElementById('savedPayrollsBar');
+                bar.style.display = sheets.length > 0 ? 'flex' : 'none';
+            } catch (e) {
+                console.error('listSavedPayrolls error:', e);
+            }
+        }
+
+        async function savePayrollToSheet() {
+            if (!isGoogleAuthed() || !file2Data || file2Data.length === 0) {
+                showToast('Upload a payroll file first and sign in with Google', 'error');
+                return;
+            }
+
+            const nameInput = document.getElementById('payrollSaveName');
+            const rawName = nameInput.value.trim();
+            if (!rawName) {
+                showToast('Enter a name for this payroll period', 'error');
+                nameInput.focus();
+                return;
+            }
+
+            const sheetTitle = PAYROLL_PREFIX + rawName;
+            const btn = document.querySelector('.payroll-save-btn');
+            const originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = 'Saving...';
+
+            try {
+                // Step 1: Create new sheet tab
+                const addResp = await fetch(
+                    `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}:batchUpdate`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${googleAccessToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            requests: [{
+                                addSheet: {
+                                    properties: { title: sheetTitle }
+                                }
+                            }]
+                        })
+                    }
+                );
+
+                if (!addResp.ok) {
+                    const err = await addResp.json();
+                    if (err.error?.message?.includes('already exists')) {
+                        showToast(`A payroll named "${rawName}" already exists. Choose a different name.`, 'error');
+                        btn.disabled = false;
+                        btn.innerHTML = originalHTML;
+                        return;
+                    }
+                    throw new Error(err.error?.message || 'Failed to create sheet');
+                }
+
+                // Step 2: Write data — build rows from file2Data
+                const headers = Object.keys(file2Data[0]);
+                const rows = [headers, ...file2Data.map(row => headers.map(h => row[h] ?? ''))];
+
+                const writeResp = await fetch(
+                    `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(sheetTitle + '!A1')}?valueInputOption=RAW`,
+                    {
+                        method: 'PUT',
+                        headers: {
+                            Authorization: `Bearer ${googleAccessToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ values: rows })
+                    }
+                );
+
+                if (!writeResp.ok) throw new Error('Failed to write data');
+
+                showToast(`Payroll "${rawName}" saved to Google Sheet (${rows.length - 1} rows) ✓`, 'success');
+                document.getElementById('payrollSaveRow').style.display = 'none';
+                listSavedPayrolls();
+            } catch (e) {
+                console.error('savePayrollToSheet error:', e);
+                showToast('Failed to save: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+            }
+        }
+
+        async function loadPayrollFromSheet() {
+            const select = document.getElementById('savedPayrollSelect');
+            const sheetName = select.value;
+            if (!sheetName || !isGoogleAuthed()) return;
+
+            try {
+                showToast('Loading payroll...', 'success');
+                const resp = await fetch(
+                    `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(sheetName)}?valueRenderOption=UNFORMATTED_VALUE`,
+                    { headers: { Authorization: `Bearer ${googleAccessToken}` } }
+                );
+
+                if (!resp.ok) throw new Error('Failed to read sheet');
+                const data = await resp.json();
+                const rows = data.values || [];
+                if (rows.length < 2) {
+                    showToast('Sheet is empty or has no data rows', 'error');
+                    return;
+                }
+
+                // Normalize: headers from row 0, data from row 1+
+                const headers = rows[0];
+                const normalized = rows.slice(1).map(row => {
+                    const obj = {};
+                    headers.forEach((h, idx) => {
+                        obj[h] = row[idx] !== undefined ? row[idx] : null;
+                    });
+                    return obj;
+                }).filter(row => Object.values(row).some(v => v !== null && v !== undefined && v !== ''));
+
+                file2Data = normalized;
+                document.getElementById('upload2').classList.add('has-file');
+                const displayName = sheetName.replace(PAYROLL_PREFIX, '');
+                document.getElementById('file2-name').textContent = `✓ ${displayName} (${normalized.length} rows)`;
+                document.getElementById('payrollSaveRow').style.display = 'none';
+                reconcileBtn.disabled = !(file1Data && file2Data);
+                showToast(`Loaded "${displayName}" (${normalized.length} rows) ✓`, 'success');
+            } catch (e) {
+                console.error('loadPayrollFromSheet error:', e);
+                showToast('Failed to load: ' + e.message, 'error');
+            }
+        }
+
         function resetApp() {
             file2Data = null;
             reconciliationResults = null;
@@ -2592,6 +2874,8 @@
             upload2.classList.remove('has-file');
             document.getElementById('file2-name').textContent = '';
             document.getElementById('file2').value = '';
+            document.getElementById('payrollSaveRow').style.display = 'none';
+            document.getElementById('savedPayrollSelect').value = '';
 
             resultsDiv.classList.remove('show');
             downloadBtn.style.display = 'none';
@@ -2942,6 +3226,14 @@
                     file2Data = normalizedData;
                     document.getElementById('upload2').classList.add('has-file');
                     document.getElementById('file2-name').textContent = file.name;
+                    // Show save-to-sheet option if authed
+                    if (isGoogleAuthed()) {
+                        document.getElementById('payrollSaveRow').style.display = 'flex';
+                        const nameInput = document.getElementById('payrollSaveName');
+                        // Auto-suggest name from filename
+                        const baseName = file.name.replace(/\.(xlsx|xls)$/i, '').replace(/_/g, ' ');
+                        nameInput.value = baseName;
+                    }
                 }
 
                 reconcileBtn.disabled = !(file1Data && file2Data);
