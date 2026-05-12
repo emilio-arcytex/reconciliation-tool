@@ -1732,12 +1732,118 @@
         }
     </style>
     <style>
-        /* Saved payrolls */
+        /* Payroll select card */
+        .payroll-select-card {
+            cursor: default !important;
+        }
+
+        .payroll-select-card input[type="file"] {
+            display: none !important;
+        }
+
+        .payroll-period-select {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.9rem;
+            outline: none;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+
+        .payroll-period-select:focus { border-color: var(--accent); }
+
+        /* Period picker dropdown */
+        .upload-payroll-wrap {
+            display: inline-block;
+        }
+
+        .period-picker {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 200;
+            width: 280px;
+            max-height: 400px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+            margin-bottom: 8px;
+            overflow: hidden;
+            flex-direction: column;
+        }
+
+        .period-picker.show { display: flex; }
+
+        .period-picker-title {
+            padding: 12px 16px 8px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .period-picker-list {
+            overflow-y: auto;
+            max-height: 340px;
+            padding: 4px 0;
+        }
+
+        .period-picker-month {
+            padding: 6px 16px 2px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .period-picker-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            transition: background 0.15s;
+        }
+
+        .period-picker-item:hover:not(.period-disabled) {
+            background: var(--bg-tertiary);
+        }
+
+        .period-picker-item.period-disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .period-picker-item .period-saved-badge {
+            font-size: 0.7rem;
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        /* Legacy payroll save row (kept for compatibility) */
         .payroll-save-row {
             display: flex;
             gap: 8px;
-            margin-top: 12px;
+            margin-top: 8px;
+            padding: 12px 16px;
             align-items: center;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
         }
 
         .payroll-save-row input {
@@ -1882,36 +1988,22 @@
                 <div class="fetch-error" id="fetchError"></div>
             </div>
 
-            <div class="upload-card" id="upload2">
-                <input type="file" id="file2" accept=".xlsx,.xls" />
+            <div class="upload-card payroll-select-card" id="upload2">
                 <div class="upload-icon">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12l-3-3m0 0l-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
                     </svg>
                 </div>
                 <h3>File 2 — Vendor Payroll</h3>
-                <p>Upload or load a saved payroll</p>
-                <div class="file-name" id="file2-name"></div>
-
-                <!-- Save payroll to Sheet -->
-                <div class="payroll-save-row" id="payrollSaveRow" style="display:none;">
-                    <input type="text" id="payrollSaveName" placeholder="Name this payroll (e.g. April 1-15)">
-                    <button class="payroll-save-btn" onclick="savePayrollToSheet()">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/></svg>
-                        Save to Sheet
-                    </button>
-                </div>
-            </div>
-
-            <!-- Saved payrolls selector -->
-            <div class="saved-payrolls-bar" id="savedPayrollsBar" style="display:none;">
-                <label class="saved-payrolls-label">📁 Saved Payrolls</label>
-                <select id="savedPayrollSelect" onchange="loadPayrollFromSheet()">
-                    <option value="">Select a saved payroll...</option>
+                <p>Select a saved payroll period</p>
+                <select class="payroll-period-select" id="savedPayrollSelect" onchange="loadPayrollFromSheet()">
+                    <option value="">Sign in with Google to load payrolls</option>
                 </select>
-                <button class="payroll-refresh-btn" onclick="listSavedPayrolls()" title="Refresh list">↻</button>
+                <div class="file-name" id="file2-name"></div>
             </div>
         </div>
+
+        <input type="file" id="file2" accept=".xlsx,.xls" style="display:none;" />
 
         <div class="actions">
             <button class="btn btn-primary" id="reconcileBtn" disabled>
@@ -1920,6 +2012,20 @@
                 </svg>
                 Run Reconciliation
             </button>
+
+            <!-- Upload Payroll with period picker -->
+            <div class="upload-payroll-wrap" style="position:relative;">
+                <button class="btn btn-secondary" id="uploadPayrollBtn" onclick="togglePeriodPicker(event)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                    </svg>
+                    Upload Payroll
+                </button>
+                <div class="period-picker" id="periodPicker">
+                    <div class="period-picker-title">Select period to upload</div>
+                    <div class="period-picker-list" id="periodPickerList"></div>
+                </div>
+            </div>
             <button class="btn btn-secondary" id="refreshDataBtn" style="display: none;" onclick="refreshData()">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
@@ -2578,20 +2684,7 @@
         // DRAG AND DROP
         // ============================================================
         function setupDragDrop() {
-            const card2 = document.getElementById('upload2');
-            ['dragenter', 'dragover'].forEach(evt => {
-                card2.addEventListener(evt, e => { e.preventDefault(); card2.classList.add('drag-over'); });
-            });
-            ['dragleave', 'drop'].forEach(evt => {
-                card2.addEventListener(evt, e => { e.preventDefault(); card2.classList.remove('drag-over'); });
-            });
-            card2.addEventListener('drop', e => {
-                const file = e.dataTransfer.files[0];
-                if (file) {
-                    const fakeEvent = { target: { files: [file] } };
-                    handleFileUpload(fakeEvent, 2);
-                }
-            });
+            // Drag-and-drop removed — File 2 now uses period picker + saved payrolls
         }
 
         // ============================================================
@@ -2709,6 +2802,21 @@
         // SAVED PAYROLLS — Save/Load vendor payrolls as Google Sheet tabs
         // ============================================================
         const PAYROLL_PREFIX = 'Payroll: ';
+        let savedPayrollNames = []; // cached list of existing payroll tab names
+        let pendingUploadPeriod = null; // period name waiting for file selection
+
+        const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+        function generatePeriodOptions(year) {
+            const periods = [];
+            for (let m = 0; m < 12; m++) {
+                const mon = MONTH_NAMES[m];
+                const lastDay = new Date(year, m + 1, 0).getDate();
+                periods.push(`${mon} 1-15, ${year}`);
+                periods.push(`${mon} 16-${lastDay}, ${year}`);
+            }
+            return periods;
+        }
 
         async function listSavedPayrolls() {
             if (!isGoogleAuthed()) return;
@@ -2719,47 +2827,104 @@
                 );
                 if (!resp.ok) throw new Error('Failed to list sheets');
                 const data = await resp.json();
-                const sheets = (data.sheets || [])
+                savedPayrollNames = (data.sheets || [])
                     .map(s => s.properties.title)
-                    .filter(t => t.startsWith(PAYROLL_PREFIX))
-                    .sort()
-                    .reverse(); // newest first by name
+                    .filter(t => t.startsWith(PAYROLL_PREFIX));
 
+                // Update the select dropdown in File 2 card
                 const select = document.getElementById('savedPayrollSelect');
-                select.innerHTML = '<option value="">Select a saved payroll...</option>';
-                for (const name of sheets) {
+                select.innerHTML = '<option value="">Select a payroll period...</option>';
+                const sorted = [...savedPayrollNames].sort().reverse();
+                for (const name of sorted) {
                     const opt = document.createElement('option');
                     opt.value = name;
                     opt.textContent = name.replace(PAYROLL_PREFIX, '');
                     select.appendChild(opt);
                 }
 
-                const bar = document.getElementById('savedPayrollsBar');
-                bar.style.display = sheets.length > 0 ? 'flex' : 'none';
+                // Update period picker disabled states
+                buildPeriodPicker();
             } catch (e) {
                 console.error('listSavedPayrolls error:', e);
             }
         }
 
-        async function savePayrollToSheet() {
-            if (!isGoogleAuthed() || !file2Data || file2Data.length === 0) {
-                showToast('Upload a payroll file first and sign in with Google', 'error');
+        function buildPeriodPicker() {
+            const list = document.getElementById('periodPickerList');
+            list.innerHTML = '';
+            const now = new Date();
+            const year = now.getFullYear();
+            const periods = generatePeriodOptions(year);
+            // Also include previous year's periods
+            const prevPeriods = generatePeriodOptions(year - 1);
+            const allPeriods = [...periods, ...prevPeriods];
+
+            let currentMonth = '';
+            // Show current year first, then previous
+            for (const period of allPeriods) {
+                const mon = period.split(' ')[0];
+                const yr = period.split(', ')[1];
+                const monthLabel = `${mon} ${yr}`;
+
+                if (monthLabel !== currentMonth) {
+                    currentMonth = monthLabel;
+                    const header = document.createElement('div');
+                    header.className = 'period-picker-month';
+                    header.textContent = monthLabel;
+                    list.appendChild(header);
+                }
+
+                const fullName = PAYROLL_PREFIX + period;
+                const isSaved = savedPayrollNames.includes(fullName);
+
+                const item = document.createElement('div');
+                item.className = `period-picker-item ${isSaved ? 'period-disabled' : ''}`;
+                item.innerHTML = `
+                    <span>${period.split(', ')[0].split(' ').slice(1).join(' ')}</span>
+                    ${isSaved ? '<span class="period-saved-badge">✓ Saved</span>' : ''}
+                `;
+
+                if (!isSaved) {
+                    item.addEventListener('click', () => selectPeriodForUpload(period));
+                }
+
+                list.appendChild(item);
+            }
+        }
+
+        function togglePeriodPicker(e) {
+            e.stopPropagation();
+            if (!isGoogleAuthed()) {
+                showToast('Sign in with Google first to upload payrolls', 'error');
                 return;
             }
+            const picker = document.getElementById('periodPicker');
+            picker.classList.toggle('show');
+        }
 
-            const nameInput = document.getElementById('payrollSaveName');
-            const rawName = nameInput.value.trim();
-            if (!rawName) {
-                showToast('Enter a name for this payroll period', 'error');
-                nameInput.focus();
-                return;
+        function selectPeriodForUpload(periodName) {
+            pendingUploadPeriod = periodName;
+            document.getElementById('periodPicker').classList.remove('show');
+            // Trigger file picker
+            const fileInput = document.getElementById('file2');
+            fileInput.value = '';
+            fileInput.click();
+        }
+
+        // Close period picker on outside click
+        document.addEventListener('click', function(e) {
+            const picker = document.getElementById('periodPicker');
+            const btn = document.getElementById('uploadPayrollBtn');
+            if (picker && btn && !btn.contains(e.target) && !picker.contains(e.target)) {
+                picker.classList.remove('show');
             }
+        });
 
-            const sheetTitle = PAYROLL_PREFIX + rawName;
-            const btn = document.querySelector('.payroll-save-btn');
-            const originalHTML = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = 'Saving...';
+        async function savePayrollToSheet(sheetTitle, dataToSave) {
+            if (!isGoogleAuthed() || !dataToSave || dataToSave.length === 0) {
+                showToast('No data to save', 'error');
+                return false;
+            }
 
             try {
                 // Step 1: Create new sheet tab
@@ -2784,17 +2949,15 @@
                 if (!addResp.ok) {
                     const err = await addResp.json();
                     if (err.error?.message?.includes('already exists')) {
-                        showToast(`A payroll named "${rawName}" already exists. Choose a different name.`, 'error');
-                        btn.disabled = false;
-                        btn.innerHTML = originalHTML;
-                        return;
+                        showToast(`"${sheetTitle}" already exists`, 'error');
+                        return false;
                     }
                     throw new Error(err.error?.message || 'Failed to create sheet');
                 }
 
-                // Step 2: Write data — build rows from file2Data
-                const headers = Object.keys(file2Data[0]);
-                const rows = [headers, ...file2Data.map(row => headers.map(h => row[h] ?? ''))];
+                // Step 2: Write data
+                const headers = Object.keys(dataToSave[0]);
+                const rows = [headers, ...dataToSave.map(row => headers.map(h => row[h] ?? ''))];
 
                 const writeResp = await fetch(
                     `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(sheetTitle + '!A1')}?valueInputOption=RAW`,
@@ -2809,16 +2972,11 @@
                 );
 
                 if (!writeResp.ok) throw new Error('Failed to write data');
-
-                showToast(`Payroll "${rawName}" saved to Google Sheet (${rows.length - 1} rows) ✓`, 'success');
-                document.getElementById('payrollSaveRow').style.display = 'none';
-                listSavedPayrolls();
+                return true;
             } catch (e) {
                 console.error('savePayrollToSheet error:', e);
                 showToast('Failed to save: ' + e.message, 'error');
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalHTML;
+                return false;
             }
         }
 
@@ -2842,7 +3000,6 @@
                     return;
                 }
 
-                // Normalize: headers from row 0, data from row 1+
                 const headers = rows[0];
                 const normalized = rows.slice(1).map(row => {
                     const obj = {};
@@ -2856,7 +3013,6 @@
                 document.getElementById('upload2').classList.add('has-file');
                 const displayName = sheetName.replace(PAYROLL_PREFIX, '');
                 document.getElementById('file2-name').textContent = `✓ ${displayName} (${normalized.length} rows)`;
-                document.getElementById('payrollSaveRow').style.display = 'none';
                 reconcileBtn.disabled = !(file1Data && file2Data);
                 showToast(`Loaded "${displayName}" (${normalized.length} rows) ✓`, 'success');
             } catch (e) {
@@ -2869,12 +3025,12 @@
             file2Data = null;
             reconciliationResults = null;
             activeFilter = 'all';
+            pendingUploadPeriod = null;
 
             const upload2 = document.getElementById('upload2');
             upload2.classList.remove('has-file');
             document.getElementById('file2-name').textContent = '';
             document.getElementById('file2').value = '';
-            document.getElementById('payrollSaveRow').style.display = 'none';
             document.getElementById('savedPayrollSelect').value = '';
 
             resultsDiv.classList.remove('show');
@@ -2884,7 +3040,6 @@
             document.getElementById('refreshDataBtn').style.display = 'none';
             reconcileBtn.disabled = true;
 
-            // Scroll back to top
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
@@ -3225,14 +3380,29 @@
                 } else {
                     file2Data = normalizedData;
                     document.getElementById('upload2').classList.add('has-file');
-                    document.getElementById('file2-name').textContent = file.name;
-                    // Show save-to-sheet option if authed
-                    if (isGoogleAuthed()) {
-                        document.getElementById('payrollSaveRow').style.display = 'flex';
-                        const nameInput = document.getElementById('payrollSaveName');
-                        // Auto-suggest name from filename
-                        const baseName = file.name.replace(/\.(xlsx|xls)$/i, '').replace(/_/g, ' ');
-                        nameInput.value = baseName;
+
+                    // If a period was selected via the picker, auto-save to Sheet
+                    if (pendingUploadPeriod && isGoogleAuthed()) {
+                        const periodName = pendingUploadPeriod;
+                        const sheetTitle = PAYROLL_PREFIX + periodName;
+                        document.getElementById('file2-name').textContent = `Saving "${periodName}"...`;
+                        pendingUploadPeriod = null;
+
+                        savePayrollToSheet(sheetTitle, normalizedData).then(success => {
+                            if (success) {
+                                document.getElementById('file2-name').textContent = `✓ ${periodName} (${normalizedData.length} rows)`;
+                                showToast(`Payroll "${periodName}" saved and loaded ✓`, 'success');
+                                listSavedPayrolls();
+                                // Auto-select it in the dropdown
+                                setTimeout(() => {
+                                    document.getElementById('savedPayrollSelect').value = sheetTitle;
+                                }, 500);
+                            } else {
+                                document.getElementById('file2-name').textContent = file.name + ' (not saved)';
+                            }
+                        });
+                    } else {
+                        document.getElementById('file2-name').textContent = file.name;
                     }
                 }
 
