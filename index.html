@@ -2856,7 +2856,19 @@
                 // Update the select dropdown in File 2 card (chronological order)
                 const select = document.getElementById('savedPayrollSelect');
                 select.innerHTML = '<option value="">Select a payroll period...</option>';
-                const sorted = [...savedPayrollNames].sort();
+
+                function payrollSortKey(name) {
+                    const period = name.replace(PAYROLL_PREFIX, '');
+                    const parts = period.match(/^(\w+)\s+(\d+)/);
+                    if (!parts) return '9999-99';
+                    const monIdx = MONTH_NAMES.indexOf(parts[1]);
+                    const day = parseInt(parts[2]);
+                    const yearMatch = period.match(/,\s*(\d{4})/);
+                    const yr = yearMatch ? yearMatch[1] : '2026';
+                    return `${yr}-${String(monIdx).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                }
+
+                const sorted = [...savedPayrollNames].sort((a, b) => payrollSortKey(a).localeCompare(payrollSortKey(b)));
                 for (const name of sorted) {
                     const opt = document.createElement('option');
                     opt.value = name;
