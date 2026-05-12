@@ -1834,6 +1834,35 @@
             font-weight: 600;
         }
 
+        .period-action-btn {
+            width: 22px;
+            height: 22px;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .period-replace:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(99,102,241,0.1);
+        }
+
+        .period-delete:hover {
+            border-color: var(--danger);
+            color: var(--danger);
+            background: rgba(239,68,68,0.1);
+        }
+
         /* Legacy payroll save row (kept for compatibility) */
         .payroll-save-row {
             display: flex;
@@ -2824,10 +2853,10 @@
                     .map(s => s.properties.title)
                     .filter(t => t.startsWith(PAYROLL_PREFIX));
 
-                // Update the select dropdown in File 2 card
+                // Update the select dropdown in File 2 card (chronological order)
                 const select = document.getElementById('savedPayrollSelect');
                 select.innerHTML = '<option value="">Select a payroll period...</option>';
-                const sorted = [...savedPayrollNames].sort().reverse();
+                const sorted = [...savedPayrollNames].sort();
                 for (const name of sorted) {
                     const opt = document.createElement('option');
                     opt.value = name;
@@ -2848,12 +2877,11 @@
             const now = new Date();
             const year = now.getFullYear();
             const periods = generatePeriodOptions(year);
-            // Also include previous year's periods
             const prevPeriods = generatePeriodOptions(year - 1);
             const allPeriods = [...periods, ...prevPeriods];
 
             let currentMonth = '';
-            // Show current year first, then previous
+
             for (const period of allPeriods) {
                 const mon = period.split(' ')[0];
                 const yr = period.split(', ')[1];
@@ -2871,13 +2899,50 @@
                 const isSaved = savedPayrollNames.includes(fullName);
 
                 const item = document.createElement('div');
-                item.className = `period-picker-item ${isSaved ? 'period-disabled' : ''}`;
-                item.innerHTML = `
-                    <span>${period.split(', ')[0].split(' ').slice(1).join(' ')}</span>
-                    ${isSaved ? '<span class="period-saved-badge">✓ Saved</span>' : ''}
-                `;
+                item.className = 'period-picker-item';
 
-                if (!isSaved) {
+                const label = document.createElement('span');
+                label.textContent = period.split(', ')[0].split(' ').slice(1).join(' ');
+
+                item.appendChild(label);
+
+                if (isSaved) {
+                    const rightSide = document.createElement('span');
+                    rightSide.style.display = 'flex';
+                    rightSide.style.alignItems = 'center';
+                    rightSide.style.gap = '8px';
+
+                    const badge = document.createElement('span');
+                    badge.className = 'period-saved-badge';
+                    badge.textContent = '✓ Saved';
+                    rightSide.appendChild(badge);
+
+                    const replaceBtn = document.createElement('button');
+                    replaceBtn.className = 'period-action-btn period-replace';
+                    replaceBtn.textContent = '↻';
+                    replaceBtn.title = 'Replace with new file';
+                    replaceBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (confirm(`Replace "${period}"? The existing data will be deleted and you'll upload a new file.`)) {
+                            deleteAndReupload(fullName, period);
+                        }
+                    });
+                    rightSide.appendChild(replaceBtn);
+
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'period-action-btn period-delete';
+                    deleteBtn.textContent = '✕';
+                    deleteBtn.title = 'Delete this payroll';
+                    deleteBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (confirm(`Delete "${period}"? This cannot be undone.`)) {
+                            deletePayrollSheet(fullName);
+                        }
+                    });
+                    rightSide.appendChild(deleteBtn);
+
+                    item.appendChild(rightSide);
+                } else {
                     item.addEventListener('click', () => selectPeriodForUpload(period));
                 }
 
@@ -2893,6 +2958,68 @@
             }
             const picker = document.getElementById('periodPicker');
             picker.classList.toggle('show');
+        }
+
+        async function deletePayrollSheet(sheetTitle) {
+            if (!isGoogleAuthed()) return;
+            try {
+                // Get the sheet ID (not name) for deletion
+                const metaResp = await fetch(
+                    `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}?fields=sheets.properties`,
+                    { headers: { Authorization: `Bearer ${googleAccessToken}` } }
+                );
+                if (!metaResp.ok) throw new Error('Failed to get sheet metadata');
+                const meta = await metaResp.json();
+                const sheet = meta.sheets.find(s => s.properties.title === sheetTitle);
+                if (!sheet) {
+                    showToast('Sheet not found', 'error');
+                    return;
+                }
+
+                const deleteResp = await fetch(
+                    `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}:batchUpdate`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${googleAccessToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            requests: [{
+                                deleteSheet: { sheetId: sheet.properties.sheetId }
+                            }]
+                        })
+                    }
+                );
+
+                if (!deleteResp.ok) throw new Error('Failed to delete sheet');
+
+                const displayName = sheetTitle.replace(PAYROLL_PREFIX, '');
+                showToast(`Deleted "${displayName}" ✓`, 'success');
+
+                // If this was the currently loaded payroll, clear it
+                const select = document.getElementById('savedPayrollSelect');
+                if (select.value === sheetTitle) {
+                    select.value = '';
+                    file2Data = null;
+                    document.getElementById('upload2').classList.remove('has-file');
+                    document.getElementById('file2-name').textContent = '';
+                    reconcileBtn.disabled = true;
+                }
+
+                listSavedPayrolls();
+            } catch (e) {
+                console.error('deletePayrollSheet error:', e);
+                showToast('Failed to delete: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteAndReupload(sheetTitle, periodName) {
+            await deletePayrollSheet(sheetTitle);
+            // Wait briefly for the deletion to propagate, then trigger upload
+            setTimeout(() => {
+                selectPeriodForUpload(periodName);
+            }, 500);
         }
 
         function selectPeriodForUpload(periodName) {
