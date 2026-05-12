@@ -2443,13 +2443,6 @@
         // ============================================================
         // SHEETS API — get headers to find column index
         // ============================================================
-        async function getSheetHeaders() {
-            if (sheetHeaders) return sheetHeaders;
-            const values = await sheetsGet(SHEET_NAME + '!1:1');
-            sheetHeaders = (values && values[0]) ? values[0] : [];
-            return sheetHeaders;
-        }
-
         // ============================================================
         // SHEETS API — find the row number for a customer+date in File 1
         // Returns 1-based row index, or -1 if not found
@@ -2912,11 +2905,19 @@
         }
 
         // Close period picker on outside click
+        // Close all dropdowns on outside click (single handler)
         document.addEventListener('click', function(e) {
+            // Period picker
             const picker = document.getElementById('periodPicker');
-            const btn = document.getElementById('uploadPayrollBtn');
-            if (picker && btn && !btn.contains(e.target) && !picker.contains(e.target)) {
+            const pBtn = document.getElementById('uploadPayrollBtn');
+            if (picker && pBtn && !pBtn.contains(e.target) && !picker.contains(e.target)) {
                 picker.classList.remove('show');
+            }
+            // Service filter dropdown
+            const svcDrop = document.getElementById('svcFilterDropdown');
+            const svcWrap = document.getElementById('svcHeaderWrap');
+            if (svcDrop && svcWrap && !svcWrap.contains(e.target) && !svcDrop.contains(e.target)) {
+                svcDrop.classList.remove('show');
             }
         });
 
@@ -2955,9 +2956,28 @@
                     throw new Error(err.error?.message || 'Failed to create sheet');
                 }
 
-                // Step 2: Write data
-                const headers = Object.keys(dataToSave[0]);
-                const rows = [headers, ...dataToSave.map(row => headers.map(h => row[h] ?? ''))];
+                // Step 2: Write data — clean up before saving
+                const allHeaders = Object.keys(dataToSave[0]);
+                // Skip auto-generated _col columns
+                const headers = allHeaders.filter(h => !h.startsWith('_col'));
+
+                function cleanValue(val, colName) {
+                    if (val === null || val === undefined) return '';
+                    const s = String(val);
+                    // Format ISO dates (e.g. "2026-03-16T03:00:48.000Z") to MM/DD/YYYY
+                    if (colName.toLowerCase().includes('date') && /^\d{4}-\d{2}-\d{2}T/.test(s)) {
+                        const d = new Date(s);
+                        if (!isNaN(d.getTime())) {
+                            return `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
+                        }
+                    }
+                    return val;
+                }
+
+                const rows = [
+                    headers,
+                    ...dataToSave.map(row => headers.map(h => cleanValue(row[h], h)))
+                ];
 
                 const writeResp = await fetch(
                     `https://sheets.googleapis.com/v4/spreadsheets/${FILE1_SHEET_ID}/values/${encodeURIComponent(sheetTitle + '!A1')}?valueInputOption=RAW`,
@@ -3625,21 +3645,6 @@
                 if (pattern.test(key)) return key;
             }
             return null;
-        }
-
-        // FILE 1: Count total unique visits (customer+date pairs)
-        function countFile1Total(data, customerCol, dateCol) {
-            const seen = new Set();
-            for (const row of data) {
-                const custRaw = row[customerCol];
-                if (custRaw !== null && custRaw !== undefined && custRaw !== '' && !isNaN(Number(custRaw)) && Number(custRaw) > 0) {
-                    const cust = Math.floor(Number(custRaw));
-                    const d = parseDate(row[dateCol]);
-                    const dateKey = d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : 'nodate';
-                    seen.add(`${cust}_${dateKey}`);
-                }
-            }
-            return seen.size;
         }
 
         // ============================================================
@@ -4465,6 +4470,10 @@
             const tbody = document.getElementById('reconTableBody');
             tbody.innerHTML = '';
 
+            if (!r || !r.details) return;
+
+            try {
+
             let matchedRows = r.details.filter(row =>
                 !row.paymentStatus.includes('NOT FOUND')
             );
@@ -4584,6 +4593,11 @@
                 }
 
                 groupIndex++;
+            }
+
+            } catch (e) {
+                console.error('renderUnifiedTable error:', e);
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--danger);">Error rendering table. Please try refreshing.</td></tr>';
             }
         }
 
@@ -5067,14 +5081,6 @@
         }
 
         // Close dropdown on outside click
-        document.addEventListener('click', function(e) {
-            const dropdown = document.getElementById('svcFilterDropdown');
-            const wrap = document.getElementById('svcHeaderWrap');
-            if (dropdown && wrap && !wrap.contains(e.target) && !dropdown.contains(e.target)) {
-                dropdown.classList.remove('show');
-            }
-        });
-
         // ============================================================
         // DISPLAY RESULTS
         // ============================================================
